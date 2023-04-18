@@ -9,8 +9,8 @@ const details = () => ({
   Operation: 'Transcode',
   Description: `This plugin will remove all language audio tracks except the 'native'
      (requires TMDB api key) and English.
-    'Native' languages are the ones that are listed on imdb. It does an API call to 
-    Radarr, Sonarr to check if the movie/series exists and grabs the IMDB id. As a last resort it 
+    'Native' languages are the ones that are listed on imdb. It does an API call to
+    Radarr, Sonarr to check if the movie/series exists and grabs the IMDB id. As a last resort it
     falls back to the IMDB id in the filename.`,
   Version: '1.2',
   Tags: 'pre-processing,configurable',
@@ -175,7 +175,7 @@ const tmdbApi = async (filename, api_key, axios) => {
   let fileName;
   // If filename begins with tt, it's already an imdb id
   if (filename) {
-    if (filename.slice(0, 2) === 'tt') {
+    if (filename.substring(0, 2) === 'tt') {
       fileName = filename;
     } else {
       const idRegex = /(tt\d{7,8})/;
@@ -257,7 +257,6 @@ const plugin = async (file, librarySettings, inputs, otherArguments) => {
           if (radarrResult) {
             imdbId = radarrResult.imdbId;
             response.infoLog += `Grabbed ID (${imdbId}) from Radarr \n`;
-            // eslint-disable-next-line import/no-unresolved,import/no-extraneous-dependencies
             const languages = require('@cospired/i18n-iso-languages');
             tmdbResult = { original_language: languages.getAlpha2Code(radarrResult.originalLanguage.name, 'en') };
           } else {
