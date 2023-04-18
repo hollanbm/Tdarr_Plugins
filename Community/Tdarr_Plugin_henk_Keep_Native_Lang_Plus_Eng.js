@@ -175,7 +175,7 @@ const tmdbApi = async (filename, api_key, axios) => {
   let fileName;
   // If filename begins with tt, it's already an imdb id
   if (filename) {
-    if (filename.slice(0, 2) === 'tt') {
+    if (filename.substring(0, 2) === 'tt') {
       fileName = filename;
     } else {
       const idRegex = /(tt\d{7,8})/;
@@ -257,7 +257,6 @@ const plugin = async (file, librarySettings, inputs, otherArguments) => {
           if (radarrResult) {
             imdbId = radarrResult.imdbId;
             response.infoLog += `Grabbed ID (${imdbId}) from Radarr \n`;
-            // eslint-disable-next-line import/no-unresolved
             const languages = require('@cospired/i18n-iso-languages');
             tmdbResult = { original_language: languages.getAlpha2Code(radarrResult.originalLanguage.name, 'en') };
           } else {
