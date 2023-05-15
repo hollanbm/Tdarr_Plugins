@@ -100,8 +100,8 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
   let convert = false;
 
   const engSubtitleCount = file.ffProbeData.streams.filter(
-    (row) => row.codec_type === 'subtitle' && 
-             row?.tags?.language?.toLowerCase()?.includes('eng')
+    (row) => row.codec_type === 'subtitle'
+             && row?.tags?.language?.toLowerCase()?.includes('eng'),
   )?.length;
 
   // Go through each stream in the file.
@@ -138,14 +138,14 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
         && file.ffProbeData.streams[i].tags.language.toLowerCase().includes('eng')
         && !file.ffProbeData.streams[i].tags.title.toLowerCase().includes('full')
         && !file.ffProbeData.streams[i].tags.title.toLowerCase().includes('dialogue')
-        &&  (
-              file.ffProbeData.streams[i].tags.title
+        && (
+          file.ffProbeData.streams[i].tags.title
+            .toLowerCase()
+            .includes('sign')
+              || file.ffProbeData.streams[i].tags.title
                 .toLowerCase()
-                .includes('sign') ||
-              file.ffProbeData.streams[i].tags.title
-                  .toLowerCase()
-                  .includes('song')
-            )
+                .includes('song')
+        )
       ) {
         ffmpegCommandInsert += `-map -0:s:${subtitleIdx} `;
         response.infoLog += `☒Subtitle stream 0:s:${subtitleIdx} detected as being english signs & songs, removing. \n`;

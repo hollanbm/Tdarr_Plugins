@@ -34,7 +34,7 @@ const tests = [
       handBrakeMode: false,
       FFmpegMode: true,
       reQueueAfter: true,
-      infoLog: 'removing pcm_s16le jpn stream index 3\nremoving dts eng stream index 1\n'
+      infoLog: 'removing pcm_s16le jpn stream index 3\nremoving dts eng stream index 1\n',
     },
   },
   {
@@ -108,6 +108,23 @@ const tests = [
   {
     input: {
       file: _.cloneDeep(require('../sampleData/media/codec_priority/sample7.json')),
+      librarySettings: {},
+      inputs: {},
+      otherArguments: {},
+    },
+    output: {
+      processFile: false,
+      preset: '',
+      container: '.mp4',
+      handBrakeMode: false,
+      FFmpegMode: true,
+      reQueueAfter: false,
+      infoLog: '☒nothing to do, only 1 stream of each langauge\n',
+    },
+  },
+  {
+    input: {
+      file: _.cloneDeep(require('../sampleData/media/codec_priority/sample8.json')),
       librarySettings: {},
       inputs: {},
       otherArguments: {},
