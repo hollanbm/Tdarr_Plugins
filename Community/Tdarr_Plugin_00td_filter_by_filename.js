@@ -53,7 +53,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
 
   if (inputs.filenamesToProcess !== '') {
     const matchList = inputs.filenamesToProcess.split(',');
-    if (matchList.some(match => fileName.includes(match))) {
+    if (matchList.some((match) => fileName.includes(match))) {
       response.processFile = true;
       response.infoLog += 'File is in filenamesToProcess. Moving to next plugin.';
     } else {
@@ -64,7 +64,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
 
   if (inputs.filenamesToNotProcess !== '') {
     const matchList = inputs.filenamesToNotProcess.split(',');
-    if (matchList.some(match => fileName.includes(match))) {
+    if (matchList.some((match) => fileName.includes(match))) {
       response.processFile = false;
       response.infoLog += 'File is in filenamesToNotProcess. Breaking out of plugin stack.';
     } else {
