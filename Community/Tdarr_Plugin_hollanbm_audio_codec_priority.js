@@ -58,7 +58,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
     return response;
   }
 
-  var audioTrackCount = file.ffProbeData.streams.filter(stream => stream.codec_type.toLowerCase() == "audio").length
+  var audioTrackCount = file.ffProbeData.streams.filter(stream => stream.codec_type?.toLowerCase() == "audio").length
 
   if (audioTrackCount == 1) {
     response.infoLog += "☒Only 1 audio track, skipping\n";
@@ -79,11 +79,11 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
       { name: "mp3" },
     ];
 
-    var videoStreamCount = file.ffProbeData.streams.filter(stream => stream.codec_type.toLowerCase() == "video").length
+    var videoStreamCount = file.ffProbeData.streams.filter(stream => stream.codec_type?.toLowerCase() == "video").length
 
     var langCount = []
     for (const lang of inputs.languages.split(',')) {
-      streamLangCount = file.ffProbeData.streams.filter(stream => stream.codec_type.toLowerCase() == "audio" && stream.tags.language.toLowerCase().includes(lang)).length
+      streamLangCount = file.ffProbeData.streams.filter(stream => stream.codec_type?.toLowerCase() == "audio" && stream.tags.language?.toLowerCase().includes(lang)).length
       if (streamLangCount >= 1) {
         langCount.push({ lang: lang, count: streamLangCount });
       }
@@ -95,22 +95,22 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
     }
     else {
       for (const lang of inputs.languages.split(',')) {
-        streamLangCount = file.ffProbeData.streams.filter(stream => stream.codec_type.toLowerCase() == "audio" && stream.tags.language.toLowerCase().includes(lang)).length
+        streamLangCount = file.ffProbeData.streams.filter(stream => stream.codec_type?.toLowerCase() == "audio" && stream.tags.language?.toLowerCase().includes(lang)).length
 
         if (streamLangCount > 1) {
-          var streams = file.ffProbeData.streams.filter(stream => stream.codec_type.toLowerCase() == "audio" && stream.tags.language.toLowerCase().includes(lang));
+          var streams = file.ffProbeData.streams.filter(stream => stream.codec_type?.toLowerCase() == "audio" && stream.tags.language?.toLowerCase().includes(lang));
 
           for (const codec of codecs) {
             var streamToKeep = streams.find(
               stream =>
                 (codec.profile &&
-                  stream.codec_name.toLowerCase().includes(codec.name) &&
+                  stream.codec_name?.toLowerCase().includes(codec.name) &&
                   stream.profile != undefined &&
-                  stream.profile.toLowerCase().includes(codec.profile)
+                  stream.profile?.toLowerCase().includes(codec.profile)
                 )
                 ||
                 (
-                  stream.codec_name.toLowerCase().includes(codec.name)
+                  stream.codec_name?.toLowerCase().includes(codec.name)
                 )
             );
 
