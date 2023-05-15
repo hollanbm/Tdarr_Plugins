@@ -8,7 +8,7 @@ const details = () => {
     Name: "Append Text to filename",
     Type: "Video",
     Operation: "Transcode",
-    Description: `[Contains built-in filter] If the filename contains '264' or '265', this plugin renames 264 files to 265 or vice versa depending on codec. \n\n`,
+      Description: `[Contains built-in filter] Appends text to end of filename\n\n`,
     Version: "1.00",
     Tags: "post-processing",
     Inputs:[
