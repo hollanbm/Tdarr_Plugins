@@ -114,7 +114,6 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
   // Check if file is a video. If it isn't then exit plugin.
   if (file.fileMedium !== 'video') {
     // eslint-disable-next-line no-console
-    console.log('File is not video');
     response.infoLog += '☒File is not video \n';
     response.processFile = false;
     return response;
@@ -130,15 +129,13 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
   if (inputs.filenamesToNotProcess !== '') {
     const fileName = file.meta.FileName;
     const matchList = inputs.filenamesToNotProcess.split(',');
-    if (matchList.some(match => fileName.includes(match))) {
+    if (matchList.some((match) => fileName.includes(match))) {
       response.processFile = false;
-      console.log('File is in filenamesToNotProcess. Breaking out of plugin stack.');
       response.infoLog += 'File is in filenamesToNotProcess. Breaking out of plugin stack.';
       return response;
-    } else {
-      response.processFile = true;
-      response.infoLog += 'File is not in filenamesToNotProcess. Moving to next plugin.';
     }
+    response.processFile = true;
+    response.infoLog += 'File is not in filenamesToNotProcess. Moving to next plugin.';
   }
 
   // Set up required variables.

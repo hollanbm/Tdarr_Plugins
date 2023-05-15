@@ -39,14 +39,13 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
   let audioIdx = 0;
   let convert = false;
 
-  //check audio codecs
+  // check audio codecs
   const notAacCount = file.ffProbeData.streams.filter(
-    (row) => row.codec_type === 'audio' && 
-             row.codec_name !== 'aac'
+    (row) => row.codec_type === 'audio'
+             && row.codec_name !== 'aac',
   )?.length;
 
-  
-  if(notAacCount > 0) {
+  if (notAacCount > 0) {
     convert = true;
 
     try {
@@ -55,24 +54,21 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
         // Check if stream is audio.
         if (file.ffProbeData.streams[i].codec_type.toLowerCase() === 'audio') {
           // Catch error here incase user left inputs.downmix empty.
-          //check codec type 
-          if(file.ffProbeData.streams[i].codec_name !== 'aac') {
+          // check codec type
+          if (file.ffProbeData.streams[i].codec_name !== 'aac') {
             ffmpegCommandInsert += `-c:a:${audioIdx} aac -b:a:${audioIdx} 512k `;
-          }
-          else {
+          } else {
             ffmpegCommandInsert += `-c:a:${audioIdx} copy `;
           }
           audioIdx += 1;
         }
       }
-    }
-    catch (err) {
+    } catch (err) {
       convert = false;
       response.infoLog += '☑error encountered, ABORT \n';
     }
   }
 
-  
   // Convert file if convert variable is set to true.
   if (convert === true) {
     response.processFile = true;

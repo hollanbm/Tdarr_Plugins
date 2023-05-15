@@ -1,21 +1,21 @@
 /* eslint no-plusplus: ["error", { "allowForLoopAfterthoughts": true }] */
 const details = () => ({
-    id: 'Tdarr_Plugin_Brad_Clean_Audio_v2',
-    Stage: 'Pre-processing',
-    Name: 'Brad-Clean audio streams v2',
-    Type: 'Audio',
-    Operation: 'Transcode',
-    Description: '\n\n',
-    Version: '1.0',
-    Tags: 'pre-processing,CleanAudioffmpeg,audio only,configurable',
-    Inputs: [{
-      name: 'language',
-      type: 'string',
-      defaultValue: 'jpn',
-      inputUI: {
-        type: 'text',
-      },
-      tooltip: `Specify language tag/s here for the audio tracks you'd like to keep
+  id: 'Tdarr_Plugin_Brad_Clean_Audio_v2',
+  Stage: 'Pre-processing',
+  Name: 'Brad-Clean audio streams v2',
+  Type: 'Audio',
+  Operation: 'Transcode',
+  Description: '\n\n',
+  Version: '1.0',
+  Tags: 'pre-processing,CleanAudioffmpeg,audio only,configurable',
+  Inputs: [{
+    name: 'language',
+    type: 'string',
+    defaultValue: 'jpn',
+    inputUI: {
+      type: 'text',
+    },
+    tooltip: `Specify language tag/s here for the audio tracks you'd like to keep
                  \\nRecommended to keep "und" as this stands for undertermined
                  \\nSome files may not have the language specified.
                  \\nMust follow ISO-639-2 3 letter format. https://en.wikipedia.org/wiki/List_of_ISO_639-2_codes
@@ -27,15 +27,15 @@ const details = () => ({
   
                  \\nExample:\\n
                  eng,und,jpn`,
+  },
+  {
+    name: 'codec_priority',
+    type: 'string',
+    defaultValue: 'truehd,flac,aac',
+    inputUI: {
+      type: 'text',
     },
-    {
-      name: 'codec_priority',
-      type: 'string',
-      defaultValue: 'truehd,flac,aac',
-      inputUI: {
-        type: 'text',
-      },
-      tooltip: `Specify language tag/s here for the audio tracks you'd like to keep
+    tooltip: `Specify language tag/s here for the audio tracks you'd like to keep
                  \\nRecommended to keep "und" as this stands for undertermined
                  \\nSome files may not have the language specified.
                  \\nMust follow ISO-639-2 3 letter format. https://en.wikipedia.org/wiki/List_of_ISO_639-2_codes
@@ -47,81 +47,81 @@ const details = () => ({
   
                  \\nExample:\\n
                  eng,und,jpn`,
-    },
-    ],
-  });
-  
-  // eslint-disable-next-line no-unused-vars
-  const plugin = (file, librarySettings, inputs, otherArguments) => {
-    const lib = require('../methods/lib')();
-    // eslint-disable-next-line no-unused-vars,no-param-reassign
-    inputs = lib.loadDefaultValues(inputs, details);
-    const response = {
-      processFile: false,
-      preset: '',
-      container: `.${file.container}`,
-      handBrakeMode: false,
-      FFmpegMode: true,
-      reQueueAfter: false,
-      infoLog: '',
-    };
-  
-    // Check if file is a video. If it isn't then exit plugin.
-    if (file.fileMedium !== 'video') {
-      // eslint-disable-next-line no-console
-      console.log('File is not video');
-      response.infoLog += '☒File is not video \n';
-      response.processFile = false;
-      return response;
-    }
-  
-    // Check if inputs.language has been configured. If it hasn't then exit plugin.
-    if (inputs.language === '') {
-      response.infoLog += '☒Language/s options not set, please configure required options. Skipping this plugin.  \n';
-      response.processFile = false;
-      return response;
-    }
-  
-    // Set up required variables.
-    const language = inputs.language.split(',');
-    let ffmpegCommandInsert = '';
-    let convert = false;
-    let audioIdx = 0;
-    let audioStreamsRemoved = 0;
-    const audioStreamCount = file.ffProbeData.streams.filter(
-      (row) => row.codec_type.toLowerCase() === 'audio',
-    ).length;
-  
-    for (let i = 0; i < file.ffProbeData.streams.length; i++) {
-      // Catch error here incase the language metadata is completely missing.
-      try {
-        // Check if stream is audio
-        // AND checks if the tracks language code does not match any of the languages entered in inputs.language.
-        if (
-          file.ffProbeData.streams[i].codec_type.toLowerCase() === 'audio'
+  },
+  ],
+});
+
+// eslint-disable-next-line no-unused-vars
+const plugin = (file, librarySettings, inputs, otherArguments) => {
+  const lib = require('../methods/lib')();
+  // eslint-disable-next-line no-unused-vars,no-param-reassign
+  inputs = lib.loadDefaultValues(inputs, details);
+  const response = {
+    processFile: false,
+    preset: '',
+    container: `.${file.container}`,
+    handBrakeMode: false,
+    FFmpegMode: true,
+    reQueueAfter: false,
+    infoLog: '',
+  };
+
+  // Check if file is a video. If it isn't then exit plugin.
+  if (file.fileMedium !== 'video') {
+    // eslint-disable-next-line no-console
+    console.log('File is not video');
+    response.infoLog += '☒File is not video \n';
+    response.processFile = false;
+    return response;
+  }
+
+  // Check if inputs.language has been configured. If it hasn't then exit plugin.
+  if (inputs.language === '') {
+    response.infoLog += '☒Language/s options not set, please configure required options. Skipping this plugin.  \n';
+    response.processFile = false;
+    return response;
+  }
+
+  // Set up required variables.
+  const language = inputs.language.split(',');
+  let ffmpegCommandInsert = '';
+  let convert = false;
+  let audioIdx = 0;
+  let audioStreamsRemoved = 0;
+  const audioStreamCount = file.ffProbeData.streams.filter(
+    (row) => row.codec_type.toLowerCase() === 'audio',
+  ).length;
+
+  for (let i = 0; i < file.ffProbeData.streams.length; i++) {
+    // Catch error here incase the language metadata is completely missing.
+    try {
+      // Check if stream is audio
+      // AND checks if the tracks language code does not match any of the languages entered in inputs.language.
+      if (
+        file.ffProbeData.streams[i].codec_type.toLowerCase() === 'audio'
           && language.indexOf(
             file.ffProbeData.streams[i].tags.language.toLowerCase(),
           ) === -1
-        ) {
-          audioStreamsRemoved += 1;
-          ffmpegCommandInsert += `-map -0:a:${audioIdx} `;
-          response.infoLog += `☒Audio stream 0:a:${audioIdx} has unwanted language tag ${file.ffProbeData.streams[
-            i
-          ].tags.language.toLowerCase()}, removing. \n`;
-          convert = true;
-        }
-      } catch (err) {
-        // Error
+      ) {
+        audioStreamsRemoved += 1;
+        ffmpegCommandInsert += `-map -0:a:${audioIdx} `;
+        response.infoLog += `☒Audio stream 0:a:${audioIdx} has unwanted language tag ${file.ffProbeData.streams[
+          i
+        ].tags.language.toLowerCase()}, removing. \n`;
+        convert = true;
       }
-  
-      // Catch error here incase the title metadata is completely missing.
-      try {
-        // Check if inputs.commentary is set to true
-        // AND if stream is audio
-        // AND then checks for stream titles with the following "commentary, description, sdh".
-        // Removing any streams that are applicable.
-        if (
-          inputs.commentary === true
+    } catch (err) {
+      // Error
+    }
+
+    // Catch error here incase the title metadata is completely missing.
+    try {
+      // Check if inputs.commentary is set to true
+      // AND if stream is audio
+      // AND then checks for stream titles with the following "commentary, description, sdh".
+      // Removing any streams that are applicable.
+      if (
+        inputs.commentary === true
           && file.ffProbeData.streams[i].codec_type.toLowerCase() === 'audio'
           && (file.ffProbeData.streams[i].tags.title
             .toLowerCase()
@@ -130,111 +130,110 @@ const details = () => ({
               .toLowerCase()
               .includes('description')
             || file.ffProbeData.streams[i].tags.title.toLowerCase().includes('sdh'))
+      ) {
+        audioStreamsRemoved += 1;
+        ffmpegCommandInsert += `-map -0:a:${audioIdx} `;
+        response.infoLog += `☒Audio stream 0:a:${audioIdx} detected as being descriptive, removing. \n`;
+        convert = true;
+      }
+    } catch (err) {
+      // Error
+    }
+
+    // Check if inputs.tag_language has something entered
+    // (Entered means user actually wants something to happen, empty would disable this)
+    // AND checks that stream is audio.
+    if (
+      inputs.tag_language !== ''
+        && file.ffProbeData.streams[i].codec_type.toLowerCase() === 'audio'
+    ) {
+      // Catch error here incase the metadata is completely missing.
+      try {
+        // Look for audio with "und" as metadata language.
+        if (
+          file.ffProbeData.streams[i].tags.language
+            .toLowerCase()
+            .includes('und')
         ) {
-          audioStreamsRemoved += 1;
-          ffmpegCommandInsert += `-map -0:a:${audioIdx} `;
-          response.infoLog += `☒Audio stream 0:a:${audioIdx} detected as being descriptive, removing. \n`;
+          ffmpegCommandInsert += `-metadata:s:a:${audioIdx} language=${inputs.tag_language} `;
+          response.infoLog
+              += `☒Audio stream 0:a:${audioIdx} detected as having no language, tagging as ${inputs.tag_language}. \n`;
           convert = true;
         }
       } catch (err) {
         // Error
       }
-  
-      // Check if inputs.tag_language has something entered
-      // (Entered means user actually wants something to happen, empty would disable this)
-      // AND checks that stream is audio.
-      if (
-        inputs.tag_language !== ''
-        && file.ffProbeData.streams[i].codec_type.toLowerCase() === 'audio'
-      ) {
-        // Catch error here incase the metadata is completely missing.
-        try {
-          // Look for audio with "und" as metadata language.
-          if (
-            file.ffProbeData.streams[i].tags.language
-              .toLowerCase()
-              .includes('und')
-          ) {
-            ffmpegCommandInsert += `-metadata:s:a:${audioIdx} language=${inputs.tag_language} `;
-            response.infoLog
-              += `☒Audio stream 0:a:${audioIdx} detected as having no language, tagging as ${inputs.tag_language}. \n`;
-            convert = true;
-          }
-        } catch (err) {
-          // Error
-        }
-  
-        // Checks if the tags metadata is completely missing.
+
+      // Checks if the tags metadata is completely missing.
+      // If so this would cause playback to show language as "undefined".
+      // No catch error here otherwise it would never detect the metadata as missing.
+      if (typeof file.ffProbeData.streams[i].tags === 'undefined') {
+        ffmpegCommandInsert += `-metadata:s:a:${audioIdx} language=${inputs.tag_language} `;
+        response.infoLog
+            += `☒Audio stream 0:a:${audioIdx} detected as having no language, tagging as ${inputs.tag_language}. \n`;
+        convert = true;
+      } else if (typeof file.ffProbeData.streams[i].tags.language === 'undefined') {
+        // Checks if the tags.language metadata is completely missing.
         // If so this would cause playback to show language as "undefined".
         // No catch error here otherwise it would never detect the metadata as missing.
-        if (typeof file.ffProbeData.streams[i].tags === 'undefined') {
-          ffmpegCommandInsert += `-metadata:s:a:${audioIdx} language=${inputs.tag_language} `;
-          response.infoLog
+        ffmpegCommandInsert += `-metadata:s:a:${audioIdx} language=${inputs.tag_language} `;
+        response.infoLog
             += `☒Audio stream 0:a:${audioIdx} detected as having no language, tagging as ${inputs.tag_language}. \n`;
-          convert = true;
-        } else if (typeof file.ffProbeData.streams[i].tags.language === 'undefined') {
-          // Checks if the tags.language metadata is completely missing.
-          // If so this would cause playback to show language as "undefined".
-          // No catch error here otherwise it would never detect the metadata as missing.
-          ffmpegCommandInsert += `-metadata:s:a:${audioIdx} language=${inputs.tag_language} `;
-          response.infoLog
-            += `☒Audio stream 0:a:${audioIdx} detected as having no language, tagging as ${inputs.tag_language}. \n`;
-          convert = true;
-        }
+        convert = true;
       }
-  
-      try {
-        // Check if title metadata is missing from any streams
-        // AND inputs.tag_title set to true AND if stream type is audio. Add title to any applicable streams.
-        if (
-          typeof file.ffProbeData.streams[i].tags.title === 'undefined'
+    }
+
+    try {
+      // Check if title metadata is missing from any streams
+      // AND inputs.tag_title set to true AND if stream type is audio. Add title to any applicable streams.
+      if (
+        typeof file.ffProbeData.streams[i].tags.title === 'undefined'
           && inputs.tag_title === true
           && file.ffProbeData.streams[i].codec_type.toLowerCase() === 'audio'
-        ) {
-          if (file.ffProbeData.streams[i].channels === 8) {
-            ffmpegCommandInsert += `-metadata:s:a:${audioIdx} title="7.1" `;
-            response.infoLog += `☒Audio stream 0:a:${audioIdx} detected as 8 channel with no title, tagging. \n`;
-            convert = true;
-          }
-          if (file.ffProbeData.streams[i].channels === 6) {
-            ffmpegCommandInsert += `-metadata:s:a:${audioIdx} title="5.1" `;
-            response.infoLog += `☒Audio stream 0:a:${audioIdx} detected as 6 channel with no title, tagging. \n`;
-            convert = true;
-          }
-          if (file.ffProbeData.streams[i].channels === 2) {
-            ffmpegCommandInsert += `-metadata:s:a:${audioIdx} title="2.0" `;
-            response.infoLog += `☒Audio stream 0:a:${audioIdx} detected as 2 channel with no title, tagging. \n`;
-            convert = true;
-          }
+      ) {
+        if (file.ffProbeData.streams[i].channels === 8) {
+          ffmpegCommandInsert += `-metadata:s:a:${audioIdx} title="7.1" `;
+          response.infoLog += `☒Audio stream 0:a:${audioIdx} detected as 8 channel with no title, tagging. \n`;
+          convert = true;
         }
-      } catch (err) {
-        // Error
+        if (file.ffProbeData.streams[i].channels === 6) {
+          ffmpegCommandInsert += `-metadata:s:a:${audioIdx} title="5.1" `;
+          response.infoLog += `☒Audio stream 0:a:${audioIdx} detected as 6 channel with no title, tagging. \n`;
+          convert = true;
+        }
+        if (file.ffProbeData.streams[i].channels === 2) {
+          ffmpegCommandInsert += `-metadata:s:a:${audioIdx} title="2.0" `;
+          response.infoLog += `☒Audio stream 0:a:${audioIdx} detected as 2 channel with no title, tagging. \n`;
+          convert = true;
+        }
       }
-  
-      // Check if stream type is audio and increment audioIdx if true.
-      if (file.ffProbeData.streams[i].codec_type.toLowerCase() === 'audio') {
-        audioIdx += 1;
-      }
+    } catch (err) {
+      // Error
     }
-    // Failsafe to cancel processing if all streams would be removed following this plugin. We don't want no audio.
-    if (audioStreamsRemoved === audioStreamCount) {
-      response.infoLog += '☒Cancelling plugin otherwise all audio tracks would be removed. \n';
-      response.processFile = false;
-      return response;
+
+    // Check if stream type is audio and increment audioIdx if true.
+    if (file.ffProbeData.streams[i].codec_type.toLowerCase() === 'audio') {
+      audioIdx += 1;
     }
-  
-    // Convert file if convert variable is set to true.
-    if (convert === true) {
-      response.processFile = true;
-      response.preset = `, -map 0 ${ffmpegCommandInsert} -c copy -max_muxing_queue_size 9999`;
-      response.container = `.${file.container}`;
-      response.reQueueAfter = true;
-    } else {
-      response.processFile = false;
-      response.infoLog += "☑File doesn't contain audio tracks which are unwanted or that require tagging.\n";
-    }
+  }
+  // Failsafe to cancel processing if all streams would be removed following this plugin. We don't want no audio.
+  if (audioStreamsRemoved === audioStreamCount) {
+    response.infoLog += '☒Cancelling plugin otherwise all audio tracks would be removed. \n';
+    response.processFile = false;
     return response;
-  };
-  module.exports.details = details;
-  module.exports.plugin = plugin;
-  
+  }
+
+  // Convert file if convert variable is set to true.
+  if (convert === true) {
+    response.processFile = true;
+    response.preset = `, -map 0 ${ffmpegCommandInsert} -c copy -max_muxing_queue_size 9999`;
+    response.container = `.${file.container}`;
+    response.reQueueAfter = true;
+  } else {
+    response.processFile = false;
+    response.infoLog += "☑File doesn't contain audio tracks which are unwanted or that require tagging.\n";
+  }
+  return response;
+};
+module.exports.details = details;
+module.exports.plugin = plugin;
