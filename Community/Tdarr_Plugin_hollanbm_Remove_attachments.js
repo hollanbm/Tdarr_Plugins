@@ -3,7 +3,7 @@ const details = () => {
   return {
     id: "Tdarr_Plugin_hollanbm_Remove_attachments",
     Stage: "Pre-processing",
-    Name: "Remove Data Streams ",
+    Name: "Remove Attachment Streams ",
     Type: "Video",
     Operation: "Transcode",
     Description: `[Contains built-in filter] This plugin removes attachments if detected. The output container is mkv \n\n`,
