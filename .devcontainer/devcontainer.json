@@ -3,10 +3,22 @@
 {
 	"name": "Node.js",
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-	"image": "mcr.microsoft.com/devcontainers/javascript-node:0-16"
+	"image": "mcr.microsoft.com/devcontainers/javascript-node:0-16",
+
+	"containerUser": "node",
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
-	// "features": {},
+	"features": {
+        "ghcr.io/devcontainers/features/common-utils:2": {
+            "configureZshAsDefaultShell": true,
+            "nonFreePackages": true,
+            "username": "node"
+        },
+        "ghcr.io/devcontainers-contrib/features/zsh-plugins:0": {
+            "plugins": "sudo git zsh-syntax-highlighting zsh-autosuggestions node",
+            "omzPlugins": "https://github.com/zsh-users/zsh-syntax-highlighting https://github.com/zsh-users/zsh-autosuggestions"
+        }
+    },
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],
@@ -15,8 +27,20 @@
 	// "postCreateCommand": "yarn install",
 
 	// Configure tool-specific properties.
-	// "customizations": {},
+	"customizations": {
+        "vscode": {
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "zsh",
+                "terminal.integrated.profiles.linux": {
+                    "zsh": {
+                        "path": "/usr/bin/zsh"
+                    }
+                }
+            }
+        }
+    }
 
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
 	// "remoteUser": "root"
+	
 }
