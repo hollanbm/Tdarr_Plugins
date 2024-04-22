@@ -23,12 +23,12 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
 
   try {
     var fs = require("fs");
-    var path = require("path")
+    var path = require("path");
 
     var fileNameOld = file._id;
 
-    file._id = file._id.replace(path.dirname(file._id, ""));
-    file.file = file.file.replace(path.dirname(file.file, ""));
+    file._id = file._id.replace(path.dirname(file._id), "");
+    file.file = file.file.replace(path.dirname(file.file), "");
     
     if (fileNameOld != file._id) {
       fs.renameSync(fileNameOld, file._id, {
