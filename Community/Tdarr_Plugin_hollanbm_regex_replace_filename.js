@@ -15,7 +15,7 @@ const details = () => {
       {
         name: 'regexFind',
         type: 'string',
-        defaultValue: `\\b((HDTV|WEBDL|WEBRIP|Bluray)\\b`,
+        defaultValue: `\\b(HDTV|WEBDL|WEBRIP|Bluray)\\b`,
         inputUI: {
           type: 'text',
         },
