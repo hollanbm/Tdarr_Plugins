@@ -3,7 +3,7 @@
 // tdarrSkipTest
 const details = () => {
   return {
-    id: "Tdarr_Plugin_hollanbm_prepend_to_filename",
+    id: "Tdarr_Plugin_hollanbm_regex_replace_filename",
     Stage: "Post-processing",
     Name: "prepend Text to filename",
     Type: "Video",
@@ -13,14 +13,24 @@ const details = () => {
     Tags: "post-processing",
     Inputs:[
       {
-        name: 'prependText',
+        name: 'regexFind',
         type: 'string',
-        defaultValue: '[TDARR]_',
+        defaultValue: /\b((1080|720)p)\b/,
         inputUI: {
           type: 'text',
         },
         tooltip:
-          `Text to prepend to end of file`,
+          `Regex to find/replace`,
+      },
+      {
+        name: 'regexReplace',
+        type: 'string',
+        defaultValue: "TDARR $1",
+        inputUI: {
+          type: 'text',
+        },
+        tooltip:
+          `Regex replacement string`,
       }
     ]
   };
@@ -34,12 +44,11 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
 
   try {
     var fs = require("fs");
-    var path = require("path");
 
     var fileNameOld = file._id;
 
-    file._id = file._id.replace(path.basename(file._id), inputs.prependText + path.basename(file._id));
-    file.file = file.file.replace(path.basename(file.file), inputs.prependText + path.basename(file.file));
+    file._id = file._id.replace(inputs.regexFind, inputs.regexReplace);
+    file.file = file.file.replace(inputs.regexFind, inputs.regexReplace);
     
     if (fileNameOld != file._id) {
       fs.renameSync(fileNameOld, file._id, {
