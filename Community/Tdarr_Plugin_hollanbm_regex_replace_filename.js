@@ -15,7 +15,7 @@ const details = () => {
       {
         name: 'regexFind',
         type: 'string',
-        defaultValue: /\b((1080|720)p)\b/,
+        defaultValue: "\b((1080|720)p)\b",
         inputUI: {
           type: 'text',
         },
@@ -46,9 +46,10 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
     var fs = require("fs");
 
     var fileNameOld = file._id;
+    var regexFind = new RegExp(inputs.regexFind, "i");
 
-    file._id = file._id.replace(inputs.regexFind, inputs.regexReplace);
-    file.file = file.file.replace(inputs.regexFind, inputs.regexReplace);
+    file._id = file._id.replace(regexFind, inputs.regexReplace);
+    file.file = file.file.replace(regexFind, inputs.regexReplace);
     
     if (fileNameOld != file._id) {
       fs.renameSync(fileNameOld, file._id, {
