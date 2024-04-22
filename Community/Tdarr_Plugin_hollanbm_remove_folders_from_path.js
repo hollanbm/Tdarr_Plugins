@@ -11,7 +11,7 @@ const details = () => {
     Description: `[Contains built-in filter] regex replace filename\n\n`,
     Version: "1.00",
     Tags: "post-processing",
-    Inputs:[]
+    Inputs:[],
   };
 };
 
@@ -27,8 +27,8 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
 
     var fileNameOld = file._id;
 
-    file._id = file._id.replace(path.dirname(file._id), "");
-    file.file = file.file.replace(path.dirname(file.file), "");
+    file._id = `${librarySettings.output}/${path.basename(file._id)}`;
+    file.file = `${librarySettings.output}/${path.basename(file.file)}`;
     
     if (fileNameOld != file._id) {
       fs.renameSync(fileNameOld, file._id, {
