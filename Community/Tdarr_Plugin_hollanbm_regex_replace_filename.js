@@ -5,10 +5,10 @@ const details = () => {
   return {
     id: "Tdarr_Plugin_hollanbm_regex_replace_filename",
     Stage: "Post-processing",
-    Name: "prepend Text to filename",
+    Name: "regex replace filename",
     Type: "Video",
     Operation: "Transcode",
-      Description: `[Contains built-in filter] prepends text to end of filename\n\n`,
+    Description: `[Contains built-in filter] regex replace filename\n\n`,
     Version: "1.00",
     Tags: "post-processing",
     Inputs:[
