@@ -15,7 +15,7 @@ const details = () => {
       {
         name: 'regexFind',
         type: 'string',
-        defaultValue: `\b((1080|720)p)\b`,
+        defaultValue: `\\b((1080|720)p)\\b`,
         inputUI: {
           type: 'text',
         },
