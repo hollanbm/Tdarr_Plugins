@@ -1,18 +1,28 @@
-//const path = require('path/posix');
-
 /* eslint no-plusplus: ["error", { "allowForLoopAfterthoughts": true }] */
 function details() {
   return {
-    id: 'Tdarr_Plugin_GR34_GrutSaveOriginalDates',
-    Stage: 'Pre-processing',
-    Name: 'Grut-Save original dates',
-    Type: 'AudDateDio',
-    Operation: 'Save',
-    Description: 'This plugin save dates (atime/mtime) of the original media to a JSON file. Should be used as FIRST plugin in the stack. To restore the original date after transcoding, use Tdarr_Plugin_GR34_GrutRestoreOriginalDates.\n\n',
+    id: "Tdarr_Plugin_GR34_GrutRestoreOriginalDates",
+    Stage: "Post-processing",
+    Name: "Re-date the file according to the original file",
+    Type: "Date",
+    Operation: "Restore",
+    Description: 'This plugin can restore dates (atime/mtime) of the original media from a JSON file. Should be used as LAST plugin in the stack. To save the original date, use Tdarr_Plugin_GR34_GrutSaveOriginalDates.\n\n',
     Version: '0.1',
     Link: '',
-    Tags: 'pre-processing,save,original,date',
+    Tags: 'post-processing,original,date,restore',
     Inputs: [
+      {
+        name: 'deleteDateFile',
+        tooltip: `Delete the file where dates are saved after restore. (default : false)
+              \\nOptional.
+              \\nExample:\\n
+              true
+              \\nExample:\\n
+              false
+              \\nDefault:\\n
+              false
+              `,
+      },
       {
         name: 'debug',
         tooltip: `print some debug output in node log (ie docker logs...).
@@ -29,67 +39,91 @@ function details() {
   };
 }
 
+
 function print_debug(debug, message) {
-  prefix=new Date().toISOString()+ " - " + "Tdarr_Plugin_GR34_GrutSaveOriginalDates - "
-  if(debug)
-    console.log(prefix+message)
+  prefix = new Date().toISOString() + " - " + "Tdarr_Plugin_GR34_GrutRestoreOriginalDates - "
+  if (debug)
+    console.log(prefix + message)
 }
 
 function plugin(file, librarySettings, inputs) {
   const response = {
-    processFile: false,
-    container: `.${file.container}`,
-    handBrakeMode: false,
-    FFmpegMode: false,
-    reQueueAfter: false,
-    infoLog: '',
+    file,
+    removeFromDB: false,
+    updateDB: true,
   };
 
   fs = require('fs');
   path = require('path');
 
-  let debug=false
+  let debug = false
   if (inputs && inputs.debug && inputs.debug.toLowerCase() === 'true')
-    debug=true 
+    debug = true
 
-  //Parsethe file property to get the path and the filenamae
+  let deleteDateFile = false
+  if (inputs && inputs.deleteDateFile && inputs.deleteDateFile.toLowerCase() === 'true')
+    deleteDateFile = true
+
+  let date_file
+  let data
+  let infostats
+  print_debug(debug, '###### Restoring original dates for ' + file.file)
+
   parsed_file=path.parse(file.file);
-  
-  // If the file being processed is a cache file, don't save the dates.
-  // We do it only for the actual file being transcoded)
-  if(parsed_file.name.includes("-TdarrCacheFile-")){
-    print_debug(debug,'######This is a temp file. Don\'t save dates '+file.file)
-  }
-  else
-  {
-    print_debug(debug,'###### Saving original dates for '+file.file)
-    print_debug(debug,"Original atime = "+file.statSync.atime)
-    print_debug(debug,"Original mtime = "+file.statSync.mtime)
-    
-    
-    date_file=`${parsed_file.dir}${path.posix.sep}${parsed_file.name}.dates`
-
-    print_debug(debug,"Save dates in "+date_file)
-    
-    try {
-
-      // convert JSON object to a string
-      const data = JSON.stringify(file.statSync, null, 4);
-
-      // write file to disk
-      fs.writeFileSync(date_file, data, 'utf8');
-
-      print_debug(debug,`File is written successfully!`);
-
-    } catch (err) {
-      print_debug(debug,`Error writing file: ${err}`);
+  date_file=`${parsed_file.dir}${path.posix.sep}${parsed_file.name}.dates`
+  //date_file = file.file + ".dates"
+  print_debug(debug, "Read dates from " + date_file)
+  try {
+    if(fs.existsSync(date_file)) {
+      print_debug(debug, "The file exists.");
+    } else {
+      print_debug(debug, 'The file does not exist. Skipping..');
+      return  response
     }
-    print_debug(debug,'###### End Processing '+file.file)
-    
+  } catch (err) {
+    print_debug(debug, `Error while checking file existence the dates: ${err}`)
   }
-  print_debug(debug,'')
-  print_debug(debug,'')
-  response.processFile = false;
+
+  try {
+    print_debug(debug, `test read file`);
+    data = fs.readFileSync(date_file, 'utf8');
+
+    // parse JSON string to JSON object
+    infostats = JSON.parse(data);
+
+    print_debug(debug, "Original atime = " + infostats.atime)
+    print_debug(debug, "Original mtime = " + infostats.mtime)
+
+
+  } catch (err) {
+    print_debug(debug, `Error reading file ${date_file} from disk: ${err}`);
+    return reponse
+  }
+
+  try {
+    print_debug(debug, "Setting atime and mtime for " + file.file)
+    print_debug(debug, "      atime=" + new Date(infostats.atime))
+    print_debug(debug, "      mtime=" + new Date(infostats.mtime))
+    fs.utimesSync(file.file, new Date(infostats.atime), new Date(infostats.mtime));
+  } catch (err) {
+    print_debug(debug, `Error while setting the dates: ${err}`);
+    return response
+  }
+
+  if(deleteDateFile){
+    try {
+      print_debug(debug, `Deleting file ${date_file}`)
+      fs.unlinkSync(date_file)
+      //file removed
+    } catch(err) {
+      print_debug(debug, `Error while deleting the file : ${err}`);
+    }
+  }
+
+  print_debug(debug, '###### End Processing ' + file.file)
+  print_debug(debug, '')
+  print_debug(debug, '')
+
   return response;
 }
 module.exports.details = details;

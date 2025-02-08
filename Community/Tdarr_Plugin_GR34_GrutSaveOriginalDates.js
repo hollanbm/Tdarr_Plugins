@@ -50,11 +50,11 @@ function plugin(file, librarySettings, inputs) {
 
   let debug=false
   if (inputs && inputs.debug && inputs.debug.toLowerCase() === 'true')
-    debug=true 
+    debug=true
 
   //Parsethe file property to get the path and the filenamae
   parsed_file=path.parse(file.file);
-  
+
   // If the file being processed is a cache file, don't save the dates.
   // We do it only for the actual file being transcoded)
   if(parsed_file.name.includes("-TdarrCacheFile-")){
@@ -65,12 +65,12 @@ function plugin(file, librarySettings, inputs) {
     print_debug(debug,'###### Saving original dates for '+file.file)
     print_debug(debug,"Original atime = "+file.statSync.atime)
     print_debug(debug,"Original mtime = "+file.statSync.mtime)
-    
-    
+
+
     date_file=`${parsed_file.dir}${path.posix.sep}${parsed_file.name}.dates`
 
     print_debug(debug,"Save dates in "+date_file)
-    
+
     try {
 
       // convert JSON object to a string
@@ -85,7 +85,7 @@ function plugin(file, librarySettings, inputs) {
       print_debug(debug,`Error writing file: ${err}`);
     }
     print_debug(debug,'###### End Processing '+file.file)
-    
+
   }
   print_debug(debug,'')
   print_debug(debug,'')
