@@ -104,6 +104,30 @@ const details = () => ({
                     \\nExample:\\n
                     false`,
   },
+  {
+    name: 'spatial_aq',
+    type: 'boolean',
+    defaultValue: true,
+    inputUI: {
+      type: 'dropdown',
+      options: [
+        'false',
+        'true',
+      ],
+    },
+  },
+  {
+    name: 'temporal_aq',
+    type: 'boolean',
+    defaultValue: true,
+    inputUI: {
+      type: 'dropdown',
+      options: [
+        'false',
+        'true',
+      ],
+    },
+  },
   ],
 });
 
@@ -253,7 +277,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
   // Check if b frame variable is true.
   if (inputs.enable_bframes === true) {
     // If set to true then add b frames argument
-    extraArguments += '-bf 5 ';
+    extraArguments += '-bf 2 ';
   }
 
   // Go through each stream in the file.
@@ -324,31 +348,29 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
   response.infoLog += `Minimum = ${minimumBitrate} \n`;
   response.infoLog += `Maximum = ${maximumBitrate} \n`;
 
-  // Codec will be checked so it can be transcoded correctly
-  if (file.video_codec_name === 'h263') {
-    response.preset = '-c:v h263_cuvid';
-  } else if (file.video_codec_name === 'h264') {
-    if (CPU10 === false) {
-      response.preset = '-c:v h264_cuvid';
-    }
-  } else if (file.video_codec_name === 'mjpeg') {
-    response.preset = '-c:v mjpeg_cuvid';
-  } else if (file.video_codec_name === 'mpeg1') {
-    response.preset = '-c:v mpeg1_cuvid';
-  } else if (file.video_codec_name === 'mpeg2') {
-    response.preset = '-c:v mpeg2_cuvid';
-  } else if (file.video_codec_name === 'mpeg4') {
-    response.preset = '-c:v mpeg4_cuvid';
-  } else if (file.video_codec_name === 'vc1') {
-    response.preset = '-c:v vc1_cuvid';
-  } else if (file.video_codec_name === 'vp8') {
-    response.preset = '-c:v vp8_cuvid';
-  } else if (file.video_codec_name === 'msmpeg4v3') {
-    response.preset = '-c:v msmpeg4v3';
-  }
+  // Set decoding options here
+  switch (file.ffProbeData.streams[0].codec_name) {
+    case 'hevc':
+      response.preset = '-vsync 0 -hwaccel cuda -hwaccel_output_format cuda -c:v hevc_cuvid ';
+      break;
+    case 'h264':
+      response.preset = '-vsync 0 -hwaccel cuda -hwaccel_output_format cuda -c:v h264_cuvid ';
+      break;
+    case 'vc1':
+      response.preset = '-vsync 0 -hwaccel cuda -hwaccel_output_format cuda -c:v vc1_cuvid ';
+      break;
+    case 'vp8':
+      response.preset = '-vsync 0 -hwaccel cuda -hwaccel_output_format cuda -c:v vp8_cuvid ';
+      break;
+    case 'vp9':
+      response.preset = '-vsync 0 -hwaccel cuda -hwaccel_output_format cuda -c:v vp9_cuvid ';
+      break;
+    default:
+      break;
+  } // end switch(codec)
 
   response.preset += `${genpts}, -map 0 -c:v hevc_nvenc -cq:v 19 ${bitrateSettings} `
-  + `-spatial_aq:v 0 -rc-lookahead:v 32 -c:a copy -c:s copy -max_muxing_queue_size 9999 ${extraArguments}`;
+  + `-spatial_aq:v ${inputs.spatial_aq === true ? 1 : 0} -temporal_aq ${inputs.temporal_aq === true ? 1 : 0} -rc-lookahead:v 32 -c:a copy -c:s copy -max_muxing_queue_size 9999 ${extraArguments}`;
   response.processFile = true;
   response.infoLog += 'File is not hevc or vp9. Transcoding. \n';
   return response;
