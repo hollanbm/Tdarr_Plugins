@@ -354,7 +354,10 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
       response.preset = '-vsync 0 -hwaccel cuda -hwaccel_output_format cuda -c:v hevc_cuvid ';
       break;
     case 'h264':
-      response.preset = '-vsync 0 -hwaccel cuda -hwaccel_output_format cuda -c:v h264_cuvid ';
+      if (CPU10 === false) {
+        // NVENC does not support 10-bit decoding in hardware
+        response.preset = '-vsync 0 -hwaccel cuda -hwaccel_output_format cuda -c:v h264_cuvid ';
+      }
       break;
     case 'vc1':
       response.preset = '-vsync 0 -hwaccel cuda -hwaccel_output_format cuda -c:v vc1_cuvid ';
