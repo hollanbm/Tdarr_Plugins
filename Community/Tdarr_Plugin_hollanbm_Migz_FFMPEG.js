@@ -46,24 +46,6 @@ const details = () => ({
                     4000`,
   },
   {
-    name: 'enable_10bit',
-    type: 'boolean',
-    defaultValue: false,
-    inputUI: {
-      type: 'dropdown',
-      options: [
-        'false',
-        'true',
-      ],
-    },
-    tooltip: `Specify if output file should be 10bit. Default is false.
-                    \\nExample:\\n
-                    true
-
-                    \\nExample:\\n
-                    false`,
-  },
-  {
     name: 'enable_bframes',
     type: 'boolean',
     defaultValue: true,
@@ -268,12 +250,6 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
     }
   }
 
-  // Check if 10bit variable is true.
-  if (inputs.enable_10bit === true) {
-    // If set to true then add 10bit argument
-    extraArguments += '-pix_fmt p010le ';
-  }
-
   // Check if b frame variable is true.
   if (inputs.enable_bframes === true) {
     // If set to true then add b frames argument
@@ -347,6 +323,10 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
   response.infoLog += `Target = ${targetBitrate} \n`;
   response.infoLog += `Minimum = ${minimumBitrate} \n`;
   response.infoLog += `Maximum = ${maximumBitrate} \n`;
+
+  if (CPU10 === true) {
+    extraArguments += '-pix_fmt p010le ';
+  }
 
   // Set decoding options here
   switch (file.ffProbeData.streams[0].codec_name) {
