@@ -17,7 +17,8 @@ const details = () => {
     5) EAC3
     6) AC3
     7) AAC
-    8) MP3
+    8) Opus
+    9) MP3
     \n`,
     Version: "1.00",
     Tags: "pre-processing,ffmpeg,audio only",
@@ -76,6 +77,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
       { name: "dts" },
       { name: "ac3" },
       { name: "aac" },
+      { name: "opus" },
       { name: "mp3" },
     ];
 
