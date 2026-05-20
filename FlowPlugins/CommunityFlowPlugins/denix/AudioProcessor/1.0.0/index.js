@@ -155,7 +155,15 @@ const details = () => ({
             type: 'boolean',
             defaultValue: true,
             inputUI: { type: 'switch' },
-            tooltip: 'Enable audio conversion to Opus with intelligent per-stream channel mapping and downmixing',
+            tooltip: 'Enable audio conversion to Opus with intelligent per-stream channel mapping and downmixing. When DISABLED the file passes through completely unchanged — no stream removal, no duplicate detection, nothing.',
+        },
+        {
+            label: '🎭 Keep Atmos Tracks',
+            name: 'keep_atmos',
+            type: 'boolean',
+            defaultValue: true,
+            inputUI: { type: 'switch' },
+            tooltip: 'Keep Dolby Atmos tracks (TrueHD Atmos / EAC-3 Atmos / JOC) as-is without converting to Opus. When DISABLED, Atmos tracks are converted to Opus like any other track.',
         },
         {
             label: '📊 Keep 7.1 as 7.1',
@@ -196,6 +204,14 @@ const details = () => ({
             defaultValue: false,
             inputUI: { type: 'switch' },
             tooltip: 'Remove commentary audio tracks from output file entirely',
+        },
+        {
+            label: '🎯 Remove Lower Quality Duplicates',
+            name: 'remove_lower_quality_duplicates',
+            type: 'boolean',
+            defaultValue: true,
+            inputUI: { type: 'switch' },
+            tooltip: 'Remove lower quality audio tracks when multiple tracks exist for same language/channel combination',
         },
         {
             label: '📊 Mono/Stereo Low Quality',
@@ -270,14 +286,6 @@ const details = () => ({
             tooltip: 'Target bitrate for multi-channel MAX quality tracks (1025+ kbps source) - Default: 320 kbps',
         },
         {
-            label: '🎯 Remove Lower Quality Duplicates',
-            name: 'remove_lower_quality_duplicates',
-            type: 'boolean',
-            defaultValue: true,
-            inputUI: { type: 'switch' },
-            tooltip: 'Remove lower quality audio tracks when multiple tracks exist for same language/channel combination',
-        },
-        {
             label: '📊 Logging Level',
             name: 'logging_level',
             type: 'string',
@@ -328,37 +336,37 @@ class InputValidator {
         if (value === undefined || value === null) {
             return defaultValue;
         }
-        
+
         if (typeof value === 'boolean') {
             return value;
         }
-        
+
         if (typeof value === 'string') {
             const normalized = value.toLowerCase().trim();
             return normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'on';
         }
-        
+
         if (typeof value === 'number') {
             return value !== 0;
         }
-        
+
         return defaultValue;
     }
-    
+
     static parseLanguageList(value, defaultValue = []) {
         if (!value || typeof value !== 'string') {
             return defaultValue;
         }
-        
+
         return value.split(',')
             .map(lang => lang.trim().toLowerCase())
             .filter(lang => lang.length === 3)
             .filter(lang => LanguageMapper.isValidCode(lang));
     }
-    
+
     static parseNumber(value, defaultValue = 0, min = null, max = null) {
         let result = defaultValue;
-        
+
         if (typeof value === 'number') {
             result = value;
         } else if (typeof value === 'string') {
@@ -367,15 +375,15 @@ class InputValidator {
                 result = parsed;
             }
         }
-        
+
         if (min !== null && result < min) {
             result = min;
         }
-        
+
         if (max !== null && result > max) {
             result = max;
         }
-        
+
         return result;
     }
 }
@@ -386,30 +394,30 @@ class AsyncHandler {
         const timeoutPromise = new Promise((_, reject) => {
             setTimeout(() => reject(new Error(`${description} timed out after ${timeoutMs}ms`)), timeoutMs);
         });
-        
+
         return Promise.race([promise, timeoutPromise]);
     }
-    
+
     static async withRetry(asyncFn, maxRetries = 3, delayMs = 1000, description = 'Operation') {
         let lastError;
-        
+
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
                 return await asyncFn();
             } catch (error) {
                 lastError = error;
-                
+
                 if (attempt === maxRetries) {
                     throw new Error(`${description} failed after ${maxRetries} attempts: ${error.message}`);
                 }
-                
+
                 await new Promise(resolve => setTimeout(resolve, delayMs * attempt));
             }
         }
-        
+
         throw lastError;
     }
-    
+
     static async safeExecute(asyncFn, defaultValue = null, logger = null) {
         try {
             return await asyncFn();
@@ -494,7 +502,7 @@ class Logger {
 // OS DETECTION AND FFMPEG PATH RESOLUTION
 const detectOperatingSystem = () => {
     const platform = os.platform();
-    
+
     if (platform === 'win32') {
         return 'windows';
     } else if (platform === 'linux') {
@@ -502,14 +510,14 @@ const detectOperatingSystem = () => {
             if (fs.existsSync('/.dockerenv')) {
                 return 'docker';
             }
-            
+
             if (fs.existsSync('/proc/1/environ')) {
                 const environ = fs.readFileSync('/proc/1/environ', 'utf8');
                 if (environ.includes('container=lxc')) {
                     return 'lxc';
                 }
             }
-            
+
             if (fs.existsSync('/proc/1/cgroup')) {
                 const cgroup = fs.readFileSync('/proc/1/cgroup', 'utf8');
                 if (cgroup.includes('docker')) {
@@ -518,7 +526,7 @@ const detectOperatingSystem = () => {
                     return 'lxc';
                 }
             }
-            
+
             return 'linux';
         } catch (error) {
             return 'linux';
@@ -532,9 +540,9 @@ const detectOperatingSystem = () => {
 
 const getFFmpegPath = (inputs, logger) => {
     const osType = detectOperatingSystem();
-    
+
     logger.debug(`Operating system detected: ${osType}`);
-    
+
     if (osType === 'windows') {
         const winPath = inputs.ffmpegPathWindows || 'ffmpeg.exe';
         logger.debug(`Using Windows FFmpeg path: ${winPath}`);
@@ -595,11 +603,11 @@ class LanguageMapper {
         if (!alpha2Code || typeof alpha2Code !== 'string') {
             return 'und';
         }
-        
+
         const normalized = alpha2Code.toLowerCase().trim();
         return languageMapping[normalized] || 'und';
     }
-    
+
     static getLanguageName(alpha3Code) {
         const languageNames = {
             'aar': 'Afar', 'abk': 'Abkhazian', 'afr': 'Afrikaans', 'aka': 'Akan', 'alb': 'Albanian',
@@ -641,10 +649,10 @@ class LanguageMapper {
             'vol': 'Volapuk', 'wln': 'Walloon', 'wel': 'Welsh', 'wol': 'Wolof', 'xho': 'Xhosa',
             'yid': 'Yiddish', 'yor': 'Yoruba', 'zha': 'Zhuang', 'zul': 'Zulu', 'gre': 'Greek'
         };
-        
+
         return languageNames[alpha3Code] || alpha3Code;
     }
-    
+
     static isValidCode(code) {
         const validLanguageCodes = [
             'aar', 'abk', 'afr', 'aka', 'alb', 'amh', 'ara', 'arg', 'arm', 'asm', 'ava', 'ave', 'aym', 'aze',
@@ -667,12 +675,30 @@ class LanguageMapper {
 
 const isValidLanguageCode = (code) => LanguageMapper.isValidCode(code);
 
+// ─── ATMOS DETECTION HELPER ───────────────────────────────────────────────────
+// Returns true if the stream is a Dolby Atmos track:
+//   • TrueHD with Atmos object layer
+//   • EAC-3 with Atmos (JOC) extension
+const isAtmosTrack = (stream) => {
+    const codec = (stream.codec_name || '').toLowerCase();
+    const title = (stream.tags?.title || '').toLowerCase();
+
+    if (codec === 'truehd' && title.includes('atmos')) return true;
+    if (codec === 'eac3' && (title.includes('atmos') || title.includes('joc'))) return true;
+
+    // Also check profile field if present (some probes expose it)
+    const profile = (stream.profile || '').toLowerCase();
+    if ((codec === 'truehd' || codec === 'eac3') && profile.includes('atmos')) return true;
+
+    return false;
+};
+
 // Enhanced IMDB ID extraction from filename
 const extractImdbId = (fileName) => {
     if (!fileName || typeof fileName !== 'string') {
         return null;
     }
-    
+
     const patterns = [
         /tt(\d{7,10})/i,
         /imdb[_-]?(\d{7,10})/i,
@@ -697,17 +723,17 @@ const extractImdbId = (fileName) => {
 // Helper function to detect commentary tracks
 const isCommentaryTrack = (stream) => {
     if (!stream.tags) return false;
-    
+
     const title = stream.tags.title?.toLowerCase() || '';
     const language = stream.tags.language?.toLowerCase() || '';
-    
+
     const commentaryKeywords = [
         'commentary', 'comment', 'director', 'cast', 'crew', 'making of',
         'behind the scenes', 'interview', 'featurette', 'audio commentary',
         'directors commentary', 'filmmaker commentary', 'producer commentary',
         'writer commentary', 'commentary track', 'audio description'
     ];
-    
+
     return commentaryKeywords.some(keyword => 
         title.includes(keyword) || 
         (language && language.includes('commentary'))
@@ -813,25 +839,25 @@ const calculateTargetChannels = (inputChannels, inputs) => {
 const getCodecQuality = (codecName, title = '') => {
     const codec = codecName.toLowerCase();
     const titleLower = title.toLowerCase();
-    
+
     if (codec === 'truehd') {
         if (titleLower.includes('atmos')) return 100;
         return 95;
     }
-    
+
     if (codec === 'dts') {
         if (titleLower.includes('dts-x')) return 90;
         if (titleLower.includes('dts-hd ma') || titleLower.includes('dts-hdma')) return 85;
         if (titleLower.includes('dts-hd hr') || titleLower.includes('dts-hdhr')) return 75;
         return 70;
     }
-    
+
     if (codec === 'eac3') {
         if (titleLower.includes('atmos')) return 65;
         if (titleLower.includes('joc')) return 60;
         return 55;
     }
-    
+
     if (codec === 'ac3') return 50;
     if (codec === 'aac') {
         if (titleLower.includes('he-aac')) return 40;
@@ -842,9 +868,9 @@ const getCodecQuality = (codecName, title = '') => {
     if (codec === 'vorbis') return 35;
     if (codec === 'mp3') return 30;
     if (codec === 'opus') return 200;
-    
+
     if (codec.startsWith('pcm_')) return 110;
-    
+
     return 0;
 };
 
@@ -852,32 +878,32 @@ const getCodecQuality = (codecName, title = '') => {
 const findDuplicateAudioTracks = (streams, audioStreamsToRemove = []) => {
     const duplicatesToRemove = [];
     const languageChannelGroups = new Map();
-    
+
     for (let i = 0; i < streams.length; i++) {
         const stream = streams[i];
-        
+
         if (stream.codec_type.toLowerCase() !== 'audio' || audioStreamsToRemove.includes(i)) {
             continue;
         }
-        
+
         const isCommentary = isCommentaryTrack(stream);
         if (isCommentary) {
             continue;
         }
-        
+
         // ✅ Skip Opus tracks - don't remove them as duplicates!
         if (stream.codec_name === 'opus') {
             continue;
         }
-        
+
         const language = stream.tags?.language?.toLowerCase() || 'und';
         const channels = stream.channels || 0;
         const groupKey = `${language}_${channels}`;
-        
+
         if (!languageChannelGroups.has(groupKey)) {
             languageChannelGroups.set(groupKey, []);
         }
-        
+
         languageChannelGroups.get(groupKey).push({
             streamIndex: i,
             stream: stream,
@@ -885,11 +911,11 @@ const findDuplicateAudioTracks = (streams, audioStreamsToRemove = []) => {
             codec: stream.codec_name
         });
     }
-    
+
     for (const [groupKey, tracks] of languageChannelGroups) {
         if (tracks.length > 1) {
             tracks.sort((a, b) => b.quality - a.quality);
-            
+
             for (let i = 1; i < tracks.length; i++) {
                 duplicatesToRemove.push({
                     streamIndex: tracks[i].streamIndex,
@@ -901,39 +927,38 @@ const findDuplicateAudioTracks = (streams, audioStreamsToRemove = []) => {
             }
         }
     }
-    
+
     return duplicatesToRemove;
 };
 
 const findLowerChannelDuplicates = (streams, audioStreamsToRemove = []) => {
     const lowerChannelToRemove = [];
     const languageChannelMap = new Map();
-    
+
     for (let i = 0; i < streams.length; i++) {
         const stream = streams[i];
-        
-		// Group streams by language and track their channel counts
+
         if (stream.codec_type.toLowerCase() !== 'audio' || audioStreamsToRemove.includes(i)) {
             continue;
         }
-        
+
         const isCommentary = isCommentaryTrack(stream);
         if (isCommentary) {
             continue;
         }
-        
+
         // ✅ Skip Opus tracks - they're already optimal!
         if (stream.codec_name === 'opus') {
             continue;
         }
-        
+
         const language = stream.tags?.language?.toLowerCase() || 'und';
         const channels = stream.channels || 0;
-        
+
         if (!languageChannelMap.has(language)) {
             languageChannelMap.set(language, []);
         }
-        
+
         languageChannelMap.get(language).push({
             streamIndex: i,
             stream: stream,
@@ -942,24 +967,22 @@ const findLowerChannelDuplicates = (streams, audioStreamsToRemove = []) => {
             quality: getCodecQuality(stream.codec_name, stream.tags?.title || '')
         });
     }
-    
+
     // For each language, find the highest channel count
     for (const [language, tracks] of languageChannelMap) {
         if (tracks.length <= 1) {
-            continue; // Only one track, nothing to compare
+            continue;
         }
-        
-        // Sort by channels (descending), then by quality (descending)
+
         tracks.sort((a, b) => {
             if (b.channels !== a.channels) {
-                return b.channels - a.channels; // Higher channels first
+                return b.channels - a.channels;
             }
-            return b.quality - a.quality; // Higher quality first
+            return b.quality - a.quality;
         });
-        
+
         const highestChannelCount = tracks[0].channels;
-        
-        // Mark all lower channel tracks for removal
+
         for (let i = 1; i < tracks.length; i++) {
             if (tracks[i].channels < highestChannelCount) {
                 lowerChannelToRemove.push({
@@ -973,7 +996,7 @@ const findLowerChannelDuplicates = (streams, audioStreamsToRemove = []) => {
             }
         }
     }
-    
+
     return lowerChannelToRemove;
 };
 
@@ -982,9 +1005,9 @@ const checkImdbRedirect = (imdbId, args, logger) => __awaiter(void 0, void 0, vo
     try {
         const axios = require('axios');
         const imdbUrl = `https://www.imdb.com/title/${imdbId}/`;
-        
+
         logger.debug(`Checking for IMDB redirects: ${imdbUrl}`);
-        
+
         const response = yield axios.get(imdbUrl, { 
             maxRedirects: 0,
             validateStatus: status => (status >= 200 && status < 400),
@@ -993,7 +1016,7 @@ const checkImdbRedirect = (imdbId, args, logger) => __awaiter(void 0, void 0, vo
             },
             timeout: 30000
         });
-        
+
         if ([301, 302, 307, 308].includes(response.status)) {
             const location = response.headers.location;
             if (location) {
@@ -1004,23 +1027,23 @@ const checkImdbRedirect = (imdbId, args, logger) => __awaiter(void 0, void 0, vo
                 }
             }
         }
-        
+
         if (response.data && typeof response.data === 'string') {
             const html = response.data;
-            
+
             const metaRefreshMatch = html.match(/<meta[^>]*http-equiv=["']refresh["'][^>]*content=["'][^"']*url=https:\/\/www\.imdb\.com\/title\/(tt\d+)/i);
             if (metaRefreshMatch && metaRefreshMatch[1] && metaRefreshMatch[1] !== imdbId) {
                 logger.success(`IMDB meta refresh redirect detected: ${imdbId} → ${metaRefreshMatch[1]}`);
                 return metaRefreshMatch[1];
             }
-            
+
             const canonicalMatch = html.match(/<link[^>]*rel=["']canonical["'][^>]*href=["']https:\/\/www\.imdb\.com\/title\/(tt\d+)/i);
             if (canonicalMatch && canonicalMatch[1] && canonicalMatch[1] !== imdbId) {
                 logger.success(`IMDB canonical redirect detected: ${imdbId} → ${canonicalMatch[1]}`);
                 return canonicalMatch[1];
             }
         }
-        
+
         return null;
     } catch (error) {
         logger.warn(`Error checking IMDB redirect: ${error.message}`);
@@ -1032,14 +1055,13 @@ const checkImdbRedirect = (imdbId, args, logger) => __awaiter(void 0, void 0, vo
 const tryTmdbLookup = (id, args, logger, searchType = 'imdb_id') => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const axios = require('axios');
-        
+
         logger.debug(`TMDB API lookup: ${searchType} = ${id}`);
-        
+
         const apiKey = args.inputs.tmdb_api_key;
-        
-        // Detect if it's a v4 Bearer token (longer) or v3 API key (shorter, 32 chars)
+
         const isV4Token = apiKey.length > 40;
-        
+
         const config = {
             timeout: 30000,
             headers: {
@@ -1047,24 +1069,22 @@ const tryTmdbLookup = (id, args, logger, searchType = 'imdb_id') => __awaiter(vo
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36'
             }
         };
-        
+
         let url;
         if (isV4Token) {
-            // v4 Bearer token - use Authorization header
             url = `https://api.themoviedb.org/3/find/${id}?language=en-US&external_source=${searchType}`;
             config.headers['Authorization'] = `Bearer ${apiKey}`;
             logger.debug('Using TMDB API v4 (Bearer token)');
         } else {
-            // v3 API key - use URL parameter
             url = `https://api.themoviedb.org/3/find/${id}?api_key=${apiKey}&language=en-US&external_source=${searchType}`;
             logger.debug('Using TMDB API v3 (API key)');
         }
-        
+
         const response = yield axios.get(url, config);
-        
+
         const data = response.data;
         logger.debug(`TMDB Response: ${JSON.stringify(data)}`);
-        
+
         if (data.movie_results && data.movie_results.length > 0) {
             logger.debug(`TMDB movie result found: ${data.movie_results[0].title || 'Unknown'}`);
             return data.movie_results[0];
@@ -1072,7 +1092,7 @@ const tryTmdbLookup = (id, args, logger, searchType = 'imdb_id') => __awaiter(vo
             logger.debug(`TMDB TV result found: ${data.tv_results[0].name || 'Unknown'}`);
             return data.tv_results[0];
         }
-        
+
         logger.debug(`No TMDB results found for ${searchType}: ${id}`);
         return null;
     } catch (error) {
@@ -1084,7 +1104,7 @@ const tryTmdbLookup = (id, args, logger, searchType = 'imdb_id') => __awaiter(vo
 // IMPROVED: Main TMDB lookup function with proper error handling
 const tmdbLookup = (identifier, args, logger, searchType = 'imdb_id') => __awaiter(void 0, void 0, void 0, function* () {
     let id = identifier;
-    
+
     if (searchType === 'imdb_id' && !id.startsWith('tt')) {
         const extracted = extractImdbId(id);
         if (extracted) {
@@ -1108,7 +1128,7 @@ const tmdbLookup = (identifier, args, logger, searchType = 'imdb_id') => __await
             30000,
             'TMDB API call'
         );
-        
+
         if (!result && searchType === 'imdb_id') {
             const newImdbId = yield AsyncHandler.safeExecute(
                 () => AsyncHandler.withTimeout(
@@ -1119,7 +1139,7 @@ const tmdbLookup = (identifier, args, logger, searchType = 'imdb_id') => __await
                 null,
                 logger
             );
-            
+
             if (newImdbId) {
                 logger.extended(`Retrying with redirected IMDB ID: ${newImdbId}`);
                 result = yield AsyncHandler.safeExecute(
@@ -1133,7 +1153,7 @@ const tmdbLookup = (identifier, args, logger, searchType = 'imdb_id') => __await
                 );
             }
         }
-        
+
         if (result) {
             const title = result.title || result.name || 'Unknown';
             const originalLang = result.original_language || 'unknown';
@@ -1141,7 +1161,7 @@ const tmdbLookup = (identifier, args, logger, searchType = 'imdb_id') => __await
         } else {
             logger.warn(`No TMDB result found for ${searchType}: ${id}`);
         }
-        
+
         return result;
     } catch (error) {
         logger.error(`TMDB lookup failed: ${error.message}`);
@@ -1153,7 +1173,7 @@ const tmdbLookup = (identifier, args, logger, searchType = 'imdb_id') => __await
 const lookupInArrInstance = (service, instance, fileName, args, logger) => __awaiter(void 0, void 0, void 0, function* () {
     const apiKey = args.inputs[`${service}_api_key_${instance}`];
     const url = args.inputs[`${service}_url_${instance}`];
-    
+
     if (!apiKey || !url) {
         logger.debug(`${service.charAt(0).toUpperCase() + service.slice(1)} ${instance} not configured`);
         return null;
@@ -1162,15 +1182,15 @@ const lookupInArrInstance = (service, instance, fileName, args, logger) => __awa
     try {
         const axios = require('axios');
         logger.api(`Querying ${service.charAt(0).toUpperCase() + service.slice(1)} ${instance}: ${url}`);
-        
+
         let cleanUrl = url.trim().replace(/\/$/, '');
-        
+
         if (!cleanUrl.match(/^https?:\/\//i)) {
             cleanUrl = `http://${cleanUrl}`;
         }
-        
+
         const encodedFileName = encodeURIComponent(fileName);
-        
+
         const response = yield axios.get(`${cleanUrl}/api/v3/parse?apikey=${apiKey}&title=${encodedFileName}`, {
             timeout: 30000,
             headers: {
@@ -1180,7 +1200,7 @@ const lookupInArrInstance = (service, instance, fileName, args, logger) => __awa
         });
 
         const data = response.data;
-        
+
         if (service === 'radarr') {
             if (data.movie) {
                 logger.success(`${service.charAt(0).toUpperCase() + service.slice(1)} ${instance}: Found movie match`);
@@ -1201,7 +1221,7 @@ const lookupInArrInstance = (service, instance, fileName, args, logger) => __awa
                 };
             }
         }
-        
+
         logger.debug(`${service.charAt(0).toUpperCase() + service.slice(1)} ${instance}: No match found`);
         return null;
     } catch (error) {
@@ -1214,10 +1234,10 @@ const lookupInArrInstance = (service, instance, fileName, args, logger) => __awa
 const getMetadataFromArr = (fileName, args, logger) => __awaiter(void 0, void 0, void 0, function* () {
     const services = InputValidator.parseBool(args.inputs.priority?.toLowerCase() === 'sonarr', false) ? 
         ['sonarr', 'radarr'] : ['radarr', 'sonarr'];
-    
+
     for (const service of services) {
         logger.extended(`Checking ${service.charAt(0).toUpperCase() + service.slice(1)} instances...`);
-        
+
         for (let instance = 1; instance <= 2; instance++) {
             const result = yield lookupInArrInstance(service, instance, fileName, args, logger);
             if (result) {
@@ -1235,7 +1255,7 @@ const getMetadataFromArr = (fileName, args, logger) => __awaiter(void 0, void 0,
             }
         }
     }
-    
+
     return null;
 });
 
@@ -1243,7 +1263,7 @@ const getMetadataFromArr = (fileName, args, logger) => __awaiter(void 0, void 0,
 const createPerformanceTimer = () => {
     const start = Date.now();
     const metrics = {};
-    
+
     return {
         mark: (label) => {
             metrics[label] = Date.now() - start;
@@ -1300,17 +1320,18 @@ const performQualityAssurance = (inputs, fileName, logger) => {
 // MAIN PLUGIN FUNCTION
 const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
     let logger;
-    
+
     try {
         const lib = require('../../../../../methods/lib')();
-        
+
         args.inputs = lib.loadDefaultValues(args.inputs, details);
-        
+
         const enableAudioConversion = InputValidator.parseBool(args.inputs.enable_audio_conversion, true);
         const enableLanguageFiltering = InputValidator.parseBool(args.inputs.enable_language_filtering, true);
-        
+        const keepAtmos = InputValidator.parseBool(args.inputs.keep_atmos, true);
+
         logger = new Logger(args.inputs.logging_level);
-        
+
         const performanceTimer = createPerformanceTimer();
         const processingMetrics = {
             languageDetectionTime: 0,
@@ -1329,10 +1350,25 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
             };
         }
 
+        // ✅ HARD PASS-THROUGH: if audio processing is disabled, do absolutely nothing.
+        // No stream removal, no duplicate detection, no stereo creation — just pass the file on.
+        if (!enableAudioConversion) {
+            logger.section('DeNiX Audio Processing: Language Detection + Opus Conversion 3.0');
+            logger.info(`File: ${path.basename(args.inputFileObj._id)}`);
+            logger.info('Audio conversion: DISABLED — passing file through completely unchanged');
+            args.jobLog(logger.getOutput());
+            return {
+                outputFileObj: args.inputFileObj,
+                outputNumber: 2,
+                variables: args.variables,
+            };
+        }
+
         logger.section('DeNiX Audio Processing: Language Detection + Opus Conversion 3.0');
         logger.info(`File: ${path.basename(args.inputFileObj._id)}`);
         logger.info(`Container: ${args.inputFileObj.container} | Streams: ${args.inputFileObj.ffProbeData.streams.length}`);
-        logger.info(`Audio conversion: ${enableAudioConversion ? 'ENABLED' : 'DISABLED'}`);
+        logger.info(`Audio conversion: ENABLED`);
+        logger.info(`Keep Atmos tracks: ${keepAtmos ? 'YES' : 'NO'}`);
 
         const ffmpegPath = getFFmpegPath(args.inputs, logger);
         logger.debug(`FFmpeg path: ${ffmpegPath}`);
@@ -1356,10 +1392,10 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
         if (enableLanguageFiltering && args.inputs.tmdb_api_key) {
             logger.subsection('Step 1: Detecting native language from TMDB/IMDB');
             const languageStartTime = Date.now();
-            
+
             try {
                 let tmdbResult = null;
-                
+
                 logger.debug(`Processing file: ${fileName}`);
                 logger.debug(`Service priority: ${args.inputs.priority.toLowerCase() === 'sonarr' ? 'sonarr → radarr' : 'radarr → sonarr'}`);
 
@@ -1379,9 +1415,9 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                 if (tmdbResult && tmdbResult.original_language) {
                     const alpha2Code = tmdbResult.original_language.toLowerCase().trim();
                     const nativeLang = LanguageMapper.getAlpha3Code(alpha2Code);
-                    
+
                     detectedLanguages = [nativeLang];
-                    
+
                     if (args.inputs.user_langs) {
                         const userLangList = InputValidator.parseLanguageList(args.inputs.user_langs, []);
                         userLangList.forEach(lang => {
@@ -1390,13 +1426,13 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                             }
                         });
                     }
-                    
+
                     ['eng', 'und'].forEach(lang => {
                         if (!detectedLanguages.includes(lang)) {
                             detectedLanguages.push(lang);
                         }
                     });
-                    
+
                     logger.success(`Native language detected: ${nativeLang}`);
                     logger.success(`Languages to keep: ${detectedLanguages.join(', ')}`);
                 } else {
@@ -1406,10 +1442,10 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                         detectedLanguages = [...new Set(['eng', 'und', ...userLangList])];
                     }
                 }
-                
+
                 processingMetrics.languageDetectionTime = Date.now() - languageStartTime;
                 performanceTimer.mark('languageDetection');
-                
+
             } catch (languageError) {
                 logger.error(`Language detection failed: ${languageError.message}`);
                 logger.warn('Falling back to user languages + defaults');
@@ -1430,9 +1466,9 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
         // STEP 2: STREAM ANALYSIS AND PLANNING
         logger.subsection('Step 2: Analyzing audio streams for processing');
         const analysisStartTime = Date.now();
-        
+
         const audioStreams = args.inputFileObj.ffProbeData.streams.filter(s => s.codec_type === 'audio');
-        
+
         logger.extended(`Current stream layout:`);
         args.inputFileObj.ffProbeData.streams.forEach((stream, index) => {
             if (stream.codec_type === 'video') {
@@ -1441,16 +1477,17 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                 const lang = stream.tags?.language || 'und';
                 const title = stream.tags?.title || '';
                 const commentary = isCommentaryTrack(stream) ? ' [COMMENTARY]' : '';
-                logger.extended(`${index}: Audio - ${stream.codec_name} ${stream.channels}ch ${lang}${commentary}${title ? ` "${title}"` : ''}`);
+                const atmos = isAtmosTrack(stream) ? ' [ATMOS]' : '';
+                logger.extended(`${index}: Audio - ${stream.codec_name} ${stream.channels}ch ${lang}${atmos}${commentary}${title ? ` "${title}"` : ''}`);
             } else if (stream.codec_type === 'subtitle') {
                 const lang = stream.tags?.language || 'und';
                 const title = stream.tags?.title || '';
                 logger.extended(`${index}: Subtitle - ${stream.codec_name} ${lang}${title ? ` "${title}"` : ''}`);
             }
         });
-        
+
         const codecsToConvert = ['aac', 'ac3', 'eac3', 'dts', 'mp3', 'flac', 'vorbis', 'wav', 'alac', 'pcm_s16le', 'pcm_s24le', 'pcm_u8', 'truehd'];
-        
+
         let audioStreamsToRemove = [];
         let audioConversionNeeded = false;
 
@@ -1458,18 +1495,18 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
         if (enableLanguageFiltering) {
             for (let i = 0; i < args.inputFileObj.ffProbeData.streams.length; i++) {
                 const stream = args.inputFileObj.ffProbeData.streams[i];
-                
+
                 if (stream.codec_type === 'audio') {
                     const language = stream.tags?.language?.toLowerCase() || 'und';
                     const isCommentary = isCommentaryTrack(stream);
-                    
+
                     // Remove commentary if configured
                     if (InputValidator.parseBool(args.inputs.remove_commentary_audio, false) && isCommentary) {
                         audioStreamsToRemove.push(i);
                         logger.info(`Audio ${i}: Commentary track marked for removal`);
                         continue;
                     }
-                    
+
                     // Remove if language not in keep list
                     if (!detectedLanguages.includes(language)) {
                         audioStreamsToRemove.push(i);
@@ -1483,9 +1520,9 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
         // Check for duplicate removal
         if (InputValidator.parseBool(args.inputs.remove_lower_quality_duplicates, true)) {
             logger.extended('Analyzing for duplicate audio tracks...');
-            
+
             const duplicatesToRemove = findDuplicateAudioTracks(args.inputFileObj.ffProbeData.streams, audioStreamsToRemove);
-            
+
             if (duplicatesToRemove.length > 0) {
                 duplicatesToRemove.forEach(duplicate => {
                     audioStreamsToRemove.push(duplicate.streamIndex);
@@ -1496,10 +1533,10 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
             }
         }
 
-        // NEW: Check for lower channel duplicates when higher channel exists
+        // Check for lower channel duplicates when higher channel exists
         logger.extended('Analyzing for lower channel duplicates...');
         const lowerChannelDuplicates = findLowerChannelDuplicates(args.inputFileObj.ffProbeData.streams, audioStreamsToRemove);
-        
+
         if (lowerChannelDuplicates.length > 0) {
             lowerChannelDuplicates.forEach(duplicate => {
                 audioStreamsToRemove.push(duplicate.streamIndex);
@@ -1513,25 +1550,28 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
         // Second pass: Check if conversion is needed for REMAINING streams
         for (let i = 0; i < args.inputFileObj.ffProbeData.streams.length; i++) {
             const stream = args.inputFileObj.ffProbeData.streams[i];
-            
+
             if (stream.codec_type === 'audio' && !audioStreamsToRemove.includes(i)) {
                 const isCommentary = isCommentaryTrack(stream);
-                
+                const isAtmos = isAtmosTrack(stream);
+
                 // Skip commentary analysis if configured
                 if (InputValidator.parseBool(args.inputs.ignore_commentary, false) && isCommentary) {
                     logger.info(`Audio ${i}: Commentary track - will keep as-is`);
                     continue;
                 }
-                
-                if (enableAudioConversion && 
-                    codecsToConvert.includes(stream.codec_name) && 
-                    stream.codec_name !== 'opus') {
+
+                // ✅ Skip Atmos tracks if keep_atmos is enabled
+                if (keepAtmos && isAtmos) {
+                    logger.success(`Audio ${i}: Atmos track detected — keeping as-is (${stream.codec_name})`);
+                    continue;
+                }
+
+                if (codecsToConvert.includes(stream.codec_name) && stream.codec_name !== 'opus') {
                     audioConversionNeeded = true;
                     logger.info(`Audio ${i}: ${stream.codec_name} → Opus conversion needed`);
                 } else if (stream.codec_name === 'opus') {
                     logger.success(`Audio ${i}: Already Opus, keeping as-is`);
-                } else if (!enableAudioConversion) {
-                    logger.info(`Audio ${i}: Conversion disabled, keeping ${stream.codec_name} as-is`);
                 } else {
                     logger.success(`Audio ${i}: ${stream.codec_name} not in conversion list, keeping as-is`);
                 }
@@ -1551,7 +1591,7 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
         if (!needsProcessing) {
             logger.success('No processing required - file is already optimal for audio');
             logger.info('Ready for next stage processing (Stream Ordering)');
-            
+
             processingMetrics.totalTime = performanceTimer.getTotalTime();
             args.jobLog(logger.getOutput());
             return {
@@ -1564,36 +1604,37 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
         // STEP 3: BUILD FFMPEG COMMAND WITH PROPER MULTI-TRACK SUPPORT
         logger.subsection('Step 3: Building FFmpeg conversion command with multi-track support');
         const audioStartTime = Date.now();
-        
+
         const workDir = (0, fileUtils_1.getPluginWorkDir)(args);
         if (!fs.existsSync(workDir)) {
             fs.mkdirSync(workDir, { recursive: true });
         }
-        
+
         const outputFilePath = path.join(workDir, `${path.parse(args.inputFileObj._id).name}.${args.inputFileObj.container}`);
-        
+
         const ffmpegArgs = ['-i', args.inputFileObj._id];
-        
+
         // Map video streams
         ffmpegArgs.push('-map', '0:v');
         ffmpegArgs.push('-c:v', 'copy');
-        
+
         // Build language-based track plan
         const languageTrackPlan = new Map();
-        
+
         // First, analyze what tracks exist per language
         for (let i = 0; i < args.inputFileObj.ffProbeData.streams.length; i++) {
             const stream = args.inputFileObj.ffProbeData.streams[i];
-            
+
             if (stream.codec_type !== 'audio' || audioStreamsToRemove.includes(i)) {
                 continue;
             }
-            
+
             const language = stream.tags?.language?.toLowerCase() || 'und';
             const channels = stream.channels || 2;
             const codec = stream.codec_name;
             const isCommentary = isCommentaryTrack(stream);
-            
+            const isAtmos = isAtmosTrack(stream);
+
             if (!languageTrackPlan.has(language)) {
                 languageTrackPlan.set(language, {
                     streams: [],
@@ -1604,16 +1645,17 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                     highestChannelCount: 0
                 });
             }
-            
+
             const langData = languageTrackPlan.get(language);
             langData.streams.push({
                 streamIndex: i,
                 stream: stream,
                 channels: channels,
                 codec: codec,
-                isCommentary: isCommentary
+                isCommentary: isCommentary,
+                isAtmos: isAtmos,
             });
-            
+
             // Track what exists
             if (channels <= 2) {
                 langData.hasStereo = true;
@@ -1622,8 +1664,8 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
             } else if (channels >= 8) {
                 langData.has71Plus = true;
             }
-            
-            // Track highest channel stream
+
+            // Track highest channel stream (excluding Atmos kept tracks for downmix source purposes)
             if (channels > langData.highestChannelCount) {
                 langData.highestChannelCount = channels;
                 langData.highestChannelStream = {
@@ -1631,27 +1673,28 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                     stream: stream,
                     channels: channels,
                     codec: codec,
-                    isCommentary: isCommentary
+                    isCommentary: isCommentary,
+                    isAtmos: isAtmos,
                 };
             }
         }
-        
+
         logger.extended(`Language track planning completed for ${languageTrackPlan.size} languages`);
-        
+
         // Track audio output index
         let audioOutputIndex = 0;
-        
+
         // Process each language group
         for (const [language, langData] of languageTrackPlan) {
             logger.extended(`Processing language: ${language}`);
-            
+
             const keep71As71 = InputValidator.parseBool(args.inputs.keep_71_as_71, false);
             const create51From71 = InputValidator.parseBool(args.inputs.create_51_from_71, false);
             const create20IfMissing = InputValidator.parseBool(args.inputs.create_20_if_missing, false);
-            
+
             // Determine what tracks to create for this language
             const tracksToCreate = [];
-            
+
             // Process each existing stream for this language
             for (const streamData of langData.streams) {
                 const stream = streamData.stream;
@@ -1659,7 +1702,21 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                 const codec = streamData.codec;
                 const streamIndex = streamData.streamIndex;
                 const isCommentary = streamData.isCommentary;
-                
+                const isAtmos = streamData.isAtmos;
+
+                // ✅ If this is an Atmos track and keep_atmos is on, always copy it unchanged
+                if (keepAtmos && isAtmos) {
+                    tracksToCreate.push({
+                        streamIndex: streamIndex,
+                        action: 'copy',
+                        channels: channels,
+                        language: language,
+                        title: stream.tags?.title || '',
+                        description: `Keep Atmos track as-is (${codec} ${channels}ch)`
+                    });
+                    continue;
+                }
+
                 // Calculate source bitrate
                 let sourceBitrate = 0;
                 if (stream.bit_rate) {
@@ -1668,12 +1725,11 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                     sourceBitrate = parseInt(stream.tags.BPS, 10);
                 }
                 const sourceBitrateKbps = sourceBitrate > 0 ? Math.round(sourceBitrate / 1000) : 0;
-                
-                const needsConversion = enableAudioConversion && 
-                                       codecsToConvert.includes(codec) && 
+
+                const needsConversion = codecsToConvert.includes(codec) && 
                                        codec !== 'opus' &&
                                        (!isCommentary || !InputValidator.parseBool(args.inputs.ignore_commentary, false));
-                
+
                 if (!needsConversion) {
                     // Just copy this stream
                     tracksToCreate.push({
@@ -1686,12 +1742,11 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                     });
                     continue;
                 }
-                
+
                 // This stream needs conversion - determine what tracks to create from it
                 if (channels >= 8) {
                     // 7.1+ source
                     if (keep71As71) {
-                        // Keep as 7.1
                         const bitrate71 = calculateTargetBitrate(8, sourceBitrateKbps, args.inputs);
                         tracksToCreate.push({
                             streamIndex: streamIndex,
@@ -1704,8 +1759,7 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                             description: `Convert to 7.1 Opus @ ${bitrate71}`,
                             useDownmixFilter: false
                         });
-                        
-                        // Additionally create 5.1 if requested
+
                         if (create51From71) {
                             const bitrate51 = calculateTargetBitrate(6, sourceBitrateKbps, args.inputs);
                             tracksToCreate.push({
@@ -1738,7 +1792,6 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                         });
                     }
                 } else if (channels === 6) {
-                    // 5.1 source - just convert to Opus 5.1
                     const bitrate51 = calculateTargetBitrate(6, sourceBitrateKbps, args.inputs);
                     tracksToCreate.push({
                         streamIndex: streamIndex,
@@ -1752,7 +1805,6 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                         useDownmixFilter: false
                     });
                 } else if (channels <= 2) {
-                    // Stereo/Mono - convert
                     const targetChannels = Math.min(channels, 2);
                     const bitrate = calculateTargetBitrate(targetChannels, sourceBitrateKbps, args.inputs);
                     tracksToCreate.push({
@@ -1783,45 +1835,47 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                     });
                 }
             }
-            
-			// After processing existing streams, check if we need to create stereo
-			if (create20IfMissing && !langData.hasStereo && langData.highestChannelStream) {
-				const highestStream = langData.highestChannelStream;
-				
-				// ✅ Only create if source is NOT already Opus and is multi-channel
-				if (highestStream.channels > 2 && highestStream.codec !== 'opus') {
-					// Calculate source bitrate
-					let sourceBitrate = 0;
-					if (highestStream.stream.bit_rate) {
-						sourceBitrate = parseInt(highestStream.stream.bit_rate, 10);
-					} else if (highestStream.stream.tags?.BPS) {
-						sourceBitrate = parseInt(highestStream.stream.tags.BPS, 10);
-					}
-					const sourceBitrateKbps = sourceBitrate > 0 ? Math.round(sourceBitrate / 1000) : 0;
-					
-					const bitrateStereo = calculateTargetBitrate(2, sourceBitrateKbps, args.inputs);
-					
-					tracksToCreate.push({
-						streamIndex: highestStream.streamIndex,
-						action: 'convert',
-						sourceChannels: highestStream.channels,
-						targetChannels: 2,
-						bitrate: bitrateStereo,
-						language: language,
-						title: highestStream.stream.tags?.title ? `${highestStream.stream.tags.title} (Stereo)` : 'Stereo',
-						description: `Create stereo Opus from ${highestStream.channels}ch @ ${bitrateStereo}`,
-						useDownmixFilter: true,
-						downmixType: 'stereo'
-					});
-					
-					logger.extended(`Creating stereo track for ${language} from ${highestStream.channels}ch source`);
-				}
-			}
-            
+
+            // After processing existing streams, check if we need to create stereo
+            if (create20IfMissing && !langData.hasStereo && langData.highestChannelStream) {
+                const highestStream = langData.highestChannelStream;
+
+                // Only create if source is NOT already Opus, is multi-channel, and is NOT an Atmos track we're keeping
+                const skipDueToAtmos = keepAtmos && highestStream.isAtmos;
+                if (highestStream.channels > 2 && highestStream.codec !== 'opus' && !skipDueToAtmos) {
+                    let sourceBitrate = 0;
+                    if (highestStream.stream.bit_rate) {
+                        sourceBitrate = parseInt(highestStream.stream.bit_rate, 10);
+                    } else if (highestStream.stream.tags?.BPS) {
+                        sourceBitrate = parseInt(highestStream.stream.tags.BPS, 10);
+                    }
+                    const sourceBitrateKbps = sourceBitrate > 0 ? Math.round(sourceBitrate / 1000) : 0;
+
+                    const bitrateStereo = calculateTargetBitrate(2, sourceBitrateKbps, args.inputs);
+
+                    tracksToCreate.push({
+                        streamIndex: highestStream.streamIndex,
+                        action: 'convert',
+                        sourceChannels: highestStream.channels,
+                        targetChannels: 2,
+                        bitrate: bitrateStereo,
+                        language: language,
+                        title: highestStream.stream.tags?.title ? `${highestStream.stream.tags.title} (Stereo)` : 'Stereo',
+                        description: `Create stereo Opus from ${highestStream.channels}ch @ ${bitrateStereo}`,
+                        useDownmixFilter: true,
+                        downmixType: 'stereo'
+                    });
+
+                    logger.extended(`Creating stereo track for ${language} from ${highestStream.channels}ch source`);
+                } else if (skipDueToAtmos) {
+                    logger.extended(`Skipping stereo creation for ${language} — highest channel source is an Atmos track being kept as-is`);
+                }
+            }
+
             // Now build FFmpeg arguments for all tracks to create
             for (const track of tracksToCreate) {
                 ffmpegArgs.push('-map', `0:${track.streamIndex}`);
-                
+
                 if (track.action === 'copy') {
                     ffmpegArgs.push(`-c:a:${audioOutputIndex}`, 'copy');
                     logger.extended(`Track ${audioOutputIndex}: ${track.description}`);
@@ -1829,13 +1883,12 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                     // Convert to Opus
                     ffmpegArgs.push(`-c:a:${audioOutputIndex}`, 'libopus');
                     ffmpegArgs.push(`-b:a:${audioOutputIndex}`, track.bitrate);
-                    
+
                     if (track.targetChannels === 6) {
                         ffmpegArgs.push(`-ac:a:${audioOutputIndex}`, '6');
                         ffmpegArgs.push(`-mapping_family:a:${audioOutputIndex}`, '1');
-                        
+
                         if (track.useDownmixFilter && track.downmixType === '5.1') {
-                            // Downmix filter for 5.1 from 7.1+
                             ffmpegArgs.push(`-filter:a:${audioOutputIndex}`, 'pan=5.1|FL=FL|FR=FR|FC=FC|LFE=LFE|BL=BL|BR=BR');
                         }
                     } else if (track.targetChannels === 8) {
@@ -1844,9 +1897,8 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                     } else if (track.targetChannels === 2) {
                         ffmpegArgs.push(`-ac:a:${audioOutputIndex}`, '2');
                         ffmpegArgs.push(`-mapping_family:a:${audioOutputIndex}`, '0');
-                        
+
                         if (track.useDownmixFilter && track.downmixType === 'stereo') {
-                            // Stereo downmix filter
                             const stereoFilter = createStereoDownmixFilter(track.sourceChannels);
                             ffmpegArgs.push(`-filter:a:${audioOutputIndex}`, stereoFilter);
                         }
@@ -1854,14 +1906,13 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                         ffmpegArgs.push(`-ac:a:${audioOutputIndex}`, '1');
                         ffmpegArgs.push(`-mapping_family:a:${audioOutputIndex}`, '0');
                     } else {
-                        // Other channel counts
                         ffmpegArgs.push(`-ac:a:${audioOutputIndex}`, track.targetChannels.toString());
                         ffmpegArgs.push(`-mapping_family:a:${audioOutputIndex}`, track.targetChannels > 2 ? '1' : '0');
                     }
-                    
+
                     logger.extended(`Track ${audioOutputIndex}: ${track.description}`);
                 }
-                
+
                 // Copy metadata
                 if (track.language && track.language !== 'none') {
                     ffmpegArgs.push(`-metadata:s:a:${audioOutputIndex}`, `language=${track.language}`);
@@ -1869,35 +1920,35 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                 if (track.title) {
                     ffmpegArgs.push(`-metadata:s:a:${audioOutputIndex}`, `title=${track.title}`);
                 }
-                
+
                 audioOutputIndex++;
             }
         }
-        
+
         // Map subtitles, data, and attachments
         ffmpegArgs.push('-map', '0:s?');
         ffmpegArgs.push('-c:s', 'copy');
         ffmpegArgs.push('-map', '0:d?');
         ffmpegArgs.push('-map', '0:t?');
-        
+
         // Add max muxing queue size
         ffmpegArgs.push('-max_muxing_queue_size', '9999');
-        
+
         // Add output file
         ffmpegArgs.push('-y', outputFilePath);
-        
+
         logger.success('FFmpeg command built successfully with multi-track support');
         logger.extended(`Output path: ${outputFilePath}`);
         logger.extended(`Total audio tracks in output: ${audioOutputIndex}`);
         logger.extended(`Audio streams removed: ${audioStreamsToRemove.length}`);
-        
+
         if (args.inputs.logging_level === 'debug') {
             logger.debug(`Full FFmpeg command: ${ffmpegPath} ${ffmpegArgs.join(' ')}`);
         }
-        
+
         // Execute FFmpeg
         logger.success('Executing FFmpeg processing...');
-        
+
         try {
             const cli = new cliUtils_1.CLI({
                 cli: ffmpegPath,
@@ -1922,15 +1973,15 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                     variables: args.variables,
                 };
             }
-            
+
             processingMetrics.audioProcessingTime = Date.now() - audioStartTime;
             processingMetrics.totalTime = performanceTimer.getTotalTime();
-            
+
             logger.success('FFmpeg processing completed successfully');
             logger.success('Audio processing complete!');
             logger.info('Ready for Stream Ordering plugin');
             logger.info('=== End of Audio Processing ===');
-            
+
             // Performance metrics
             if (args.inputs.logging_level === 'extended' || args.inputs.logging_level === 'debug') {
                 logger.subsection('Performance Metrics');
@@ -1939,28 +1990,29 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                 logger.extended(`⏱️ Audio processing: ${processingMetrics.audioProcessingTime}ms`);
                 logger.extended(`⏱️ Total processing: ${processingMetrics.totalTime}ms`);
             }
-            
+
             args.jobLog(logger.getOutput());
-            
+
             const enhancedVariables = Object.assign(Object.assign({}, args.variables), {
                 denix_audio_completed: true,
                 denix_audio_processing_time: processingMetrics.totalTime,
                 denix_audio_languages_detected: detectedLanguages.join(','),
                 denix_audio_streams_removed: audioStreamsToRemove.length,
-                denix_audio_conversion_performed: audioConversionNeeded && enableAudioConversion,
+                denix_audio_conversion_performed: audioConversionNeeded,
                 denix_audio_tracks_created: audioOutputIndex,
                 denix_audio_ffmpeg_path: ffmpegPath,
                 denix_audio_os_detected: detectOperatingSystem(),
                 denix_audio_timestamp: new Date().toISOString(),
-                denix_audio_plugin_version: '2.0.0',
+                denix_audio_plugin_version: '2.1.0',
                 denix_audio_language_detection_time: processingMetrics.languageDetectionTime,
                 denix_audio_stream_analysis_time: processingMetrics.streamAnalysisTime,
                 denix_audio_audio_processing_time: processingMetrics.audioProcessingTime,
                 denix_audio_duplicate_tracks_removed: InputValidator.parseBool(args.inputs.remove_lower_quality_duplicates, true) ? findDuplicateAudioTracks(args.inputFileObj.ffProbeData.streams, audioStreamsToRemove).length : 0,
                 denix_audio_streams_processed: args.inputFileObj.ffProbeData.streams.length,
-                denix_audio_output_streams: audioOutputIndex
+                denix_audio_output_streams: audioOutputIndex,
+                denix_audio_atmos_kept: keepAtmos,
             });
-            
+
             return {
                 outputFileObj: {
                     _id: outputFilePath,
@@ -1968,11 +2020,11 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                 outputNumber: 1,
                 variables: enhancedVariables,
             };
-            
+
         } catch (ffmpegError) {
             logger.error(`FFmpeg execution failed: ${ffmpegError.message}`);
             logger.error('Audio processing failed - routing to error output');
-            
+
             args.jobLog(logger.getOutput());
             return {
                 outputFileObj: args.inputFileObj,
