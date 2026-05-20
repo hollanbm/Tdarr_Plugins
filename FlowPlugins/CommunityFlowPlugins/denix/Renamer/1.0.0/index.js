@@ -419,6 +419,7 @@ const AUDIO_CODEC_MAP = {
 };
 
 // Resolution detection
+// Fixed resolution detection function
 const detectResolution = (videoStream, resolutionFormat = 'standard') => {
     if (!videoStream || !videoStream.width || !videoStream.height) return null;
     
@@ -448,10 +449,56 @@ const detectResolution = (videoStream, resolutionFormat = 'standard') => {
     
     const resolutionMap = resolutionMaps[resolutionFormat] || resolutionMaps.standard;
     
+    // Check for exact width match first
     if (resolutionMap[width]) {
         return resolutionMap[width];
     }
     
+    // ==========================================
+    // FIX: Use height as primary detection method
+    // This is more reliable than width ranges
+    // ==========================================
+    
+    // Height-based detection (primary method)
+    if (height >= 2100) {
+        return resolutionFormat === 'marketing' ? '4K UHD' : 
+               resolutionFormat === 'technical' ? '2160p' : '4K';
+    }
+    
+    if (height >= 1400 && height < 2100) {
+        return resolutionFormat === 'marketing' ? '2K QHD' : 
+               resolutionFormat === 'technical' ? '1440p' : '1440p';
+    }
+    
+    if (height >= 1000 && height < 1400) {
+        return resolutionFormat === 'marketing' ? 'Full HD' : '1080p';
+    }
+    
+    if (height >= 700 && height < 1000) {
+        return resolutionFormat === 'marketing' ? 'HD' : '720p';
+    }
+    
+    if (height >= 550 && height < 700) {
+        return resolutionFormat === 'marketing' ? 'PAL' : '576p';
+    }
+    
+    if (height >= 460 && height < 550) {
+        return resolutionFormat === 'marketing' ? 'SD' : '480p';
+    }
+    
+    if (height >= 340 && height < 460) {
+        return '360p';
+    }
+    
+    if (height >= 220 && height < 340) {
+        return '240p';
+    }
+    
+    if (height < 220) {
+        return '144p';
+    }
+    
+    // Fallback to width-based detection (secondary method)
     if (width >= 7680) {
         return resolutionFormat === 'marketing' ? '8K UHD' : 
                resolutionFormat === 'technical' ? '4320p' : '8K';
@@ -466,11 +513,11 @@ const detectResolution = (videoStream, resolutionFormat = 'standard') => {
         return resolutionFormat === 'marketing' ? '2K QHD' : '1440p';
     }
     
-    if (width >= 1920 && width < 2560) {
+    if (width >= 1800 && width < 2560) {  // ← Changed from 1920 to 1800
         return resolutionFormat === 'marketing' ? 'Full HD' : '1080p';
     }
     
-    if (width >= 1280 && width < 1920) {
+    if (width >= 1280 && width < 1800) {  // ← Changed upper bound from 1920 to 1800
         return resolutionFormat === 'marketing' ? 'HD' : '720p';
     }
     
@@ -482,28 +529,7 @@ const detectResolution = (videoStream, resolutionFormat = 'standard') => {
         return resolutionFormat === 'marketing' ? 'SD' : '480p';
     }
     
-    if (width >= 480 && width < 640) {
-        return '360p';
-    }
-    
-    if (width >= 320 && width < 480) {
-        return '240p';
-    }
-    
-    if (width < 320) {
-        return '144p';
-    }
-    
-    if (height >= 2160) return resolutionFormat === 'technical' ? '2160p' : '4K';
-    if (height >= 1440) return '1440p';
-    if (height >= 1080) return '1080p';
-    if (height >= 720) return '720p';
-    if (height >= 576) return '576p';
-    if (height >= 480) return '480p';
-    if (height >= 360) return '360p';
-    if (height >= 240) return '240p';
-    
-    return '144p';
+    return '480p'; // Final fallback
 };
 
 // Regex patterns for codec detection
