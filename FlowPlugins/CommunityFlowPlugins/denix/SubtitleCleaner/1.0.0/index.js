@@ -497,6 +497,13 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
         const workDir = (0, fileUtils_1.getPluginWorkDir)(args);
         const outputFilePath = path.join(workDir, `${path.parse(args.inputFileObj._id).name}.${args.inputFileObj.container}`);
         
+        // Ensure output directory exists before FFmpeg writes to it
+        const outputDir = path.dirname(outputFilePath);
+        if (!fs.existsSync(outputDir)) {
+            fs.mkdirSync(outputDir, { recursive: true });
+            logger.debug(`Created output directory: ${outputDir}`);
+        }
+        
         let muxArgs = ['-i', args.inputFileObj._id];
         
         // Map video streams
