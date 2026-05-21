@@ -54,7 +54,7 @@ const details = () => ({
             label: '🌍 Enable Language Filtering',
             name: 'enable_language_filtering',
             type: 'boolean',
-            defaultValue: true,
+            defaultValue: false,
             inputUI: { type: 'switch' },
             tooltip: 'Enable automatic language filtering based on native language detection from TMDB/IMDB',
         },
@@ -153,7 +153,7 @@ const details = () => ({
             label: '🎵 Enable Audio Conversion',
             name: 'enable_audio_conversion',
             type: 'boolean',
-            defaultValue: true,
+            defaultValue: false,
             inputUI: { type: 'switch' },
             tooltip: 'Enable audio conversion to Opus with intelligent per-stream channel mapping and downmixing. When DISABLED the file passes through completely unchanged — no stream removal, no duplicate detection, nothing.',
         },
@@ -161,7 +161,7 @@ const details = () => ({
             label: '🎭 Keep Atmos Tracks',
             name: 'keep_atmos',
             type: 'boolean',
-            defaultValue: true,
+            defaultValue: false,
             inputUI: { type: 'switch' },
             tooltip: 'Keep Dolby Atmos tracks (TrueHD Atmos / EAC-3 Atmos / JOC) as-is without converting to Opus. When DISABLED, Atmos tracks are converted to Opus like any other track.',
         },
@@ -209,7 +209,7 @@ const details = () => ({
             label: '🎯 Remove Lower Quality Duplicates',
             name: 'remove_lower_quality_duplicates',
             type: 'boolean',
-            defaultValue: true,
+            defaultValue: false,
             inputUI: { type: 'switch' },
             tooltip: 'Remove lower quality audio tracks when multiple tracks exist for same language/channel combination',
         },
@@ -305,7 +305,7 @@ const details = () => ({
             tooltip: 'Path to FFmpeg binary for Linux/Docker/LXC environments (default: ffmpeg)',
         },
         {
-            label: ' FFmpeg Path (Windows)',
+            label: '🪟 FFmpeg Path (Windows)',
             name: 'ffmpegPathWindows',
             type: 'string',
             defaultValue: 'ffmpeg.exe',
@@ -675,7 +675,7 @@ class LanguageMapper {
 
 const isValidLanguageCode = (code) => LanguageMapper.isValidCode(code);
 
-// ATMOS DETECTION HELPER
+// ─── ATMOS DETECTION HELPER ───────────────────────────────────────────────────
 const isAtmosTrack = (stream) => {
     const codec = (stream.codec_name || '').toLowerCase();
     const title = (stream.tags?.title || '').toLowerCase();
@@ -993,6 +993,8 @@ const findLowerChannelDuplicates = (streams, audioStreamsToRemove = []) => {
     return lowerChannelToRemove;
 };
 
+
+
 // IMPROVED: Enhanced IMDB redirect detection with proper error handling
 const checkImdbRedirect = (imdbId, args, logger) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -1275,7 +1277,7 @@ const performQualityAssurance = (inputs, fileName, logger) => {
     };
 
     try {
-        if (InputValidator.parseBool(inputs.enable_language_filtering, true) && (!inputs.tmdb_api_key || inputs.tmdb_api_key.trim() === '')) {
+        if (InputValidator.parseBool(inputs.enable_language_filtering, false) && (!inputs.tmdb_api_key || inputs.tmdb_api_key.trim() === '')) {
             result.warnings.push('TMDB API key not provided - language detection will be disabled');
         }
 
@@ -1288,7 +1290,7 @@ const performQualityAssurance = (inputs, fileName, logger) => {
         const hasRadarr = (inputs.radarr_api_key_1 && inputs.radarr_url_1) || (inputs.radarr_api_key_2 && inputs.radarr_url_2);
         const hasSonarr = (inputs.sonarr_api_key_1 && inputs.sonarr_url_1) || (inputs.sonarr_api_key_2 && inputs.sonarr_url_2);
 
-        if (InputValidator.parseBool(inputs.enable_language_filtering, true) && !hasRadarr && !hasSonarr) {
+        if (InputValidator.parseBool(inputs.enable_language_filtering, false) && !hasRadarr && !hasSonarr) {
             result.warnings.push('No *ARR services configured - will fallback to filename IMDB ID extraction');
         }
 
@@ -1319,11 +1321,29 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
 
         args.inputs = lib.loadDefaultValues(args.inputs, details);
 
-        const enableAudioConversion = InputValidator.parseBool(args.inputs.enable_audio_conversion, true);
-        const enableLanguageFiltering = InputValidator.parseBool(args.inputs.enable_language_filtering, true);
-        const keepAtmos = InputValidator.parseBool(args.inputs.keep_atmos, true);
+        // ── Parse ALL booleans with false as the safe default ──────────────────
+        const enableAudioConversion   = InputValidator.parseBool(args.inputs.enable_audio_conversion, false);
+        const enableLanguageFiltering = InputValidator.parseBool(args.inputs.enable_language_filtering, false);
+        const keepAtmos               = InputValidator.parseBool(args.inputs.keep_atmos, false);
 
         logger = new Logger(args.inputs.logging_level);
+
+        logger.section('DeNiX Audio Processing: Language Detection + Opus Conversion 3.1');
+
+        // ── HARD PASS-THROUGH: audio conversion disabled ────────────────────────
+        // Nothing happens — no language lookup, no stream analysis, no FFmpeg.
+        // Log and immediately return outputNumber 2 so the next plugin runs.
+        if (!enableAudioConversion) {
+            logger.info(`File: ${path.basename(args.inputFileObj._id)}`);
+            logger.info('Audio conversion: DISABLED — passing file through completely unchanged');
+            logger.info('Routing to next plugin (output 2)');
+            args.jobLog(logger.getOutput());
+            return {
+                outputFileObj: args.inputFileObj,
+                outputNumber: 2,
+                variables: args.variables,
+            };
+        }
 
         const performanceTimer = createPerformanceTimer();
         const processingMetrics = {
@@ -1343,20 +1363,6 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
             };
         }
 
-        // HARD PASS-THROUGH: if audio processing is disabled, do absolutely nothing.
-        if (!enableAudioConversion) {
-            logger.section('DeNiX Audio Processing: Language Detection + Opus Conversion 3.0');
-            logger.info(`File: ${path.basename(args.inputFileObj._id)}`);
-            logger.info('Audio conversion: DISABLED — passing file through completely unchanged');
-            args.jobLog(logger.getOutput());
-            return {
-                outputFileObj: args.inputFileObj,
-                outputNumber: 2,
-                variables: args.variables,
-            };
-        }
-
-        logger.section('DeNiX Audio Processing: Language Detection + Opus Conversion 3.0');
         logger.info(`File: ${path.basename(args.inputFileObj._id)}`);
         logger.info(`Container: ${args.inputFileObj.container} | Streams: ${args.inputFileObj.ffProbeData.streams.length}`);
         logger.info(`Audio conversion: ENABLED`);
@@ -1492,14 +1498,12 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                     const language = stream.tags?.language?.toLowerCase() || 'und';
                     const isCommentary = isCommentaryTrack(stream);
 
-                    // Remove commentary if configured
                     if (InputValidator.parseBool(args.inputs.remove_commentary_audio, false) && isCommentary) {
                         audioStreamsToRemove.push(i);
                         logger.info(`Audio ${i}: Commentary track marked for removal`);
                         continue;
                     }
 
-                    // Remove if language not in keep list
                     if (!detectedLanguages.includes(language)) {
                         audioStreamsToRemove.push(i);
                         logger.info(`Audio ${i}: Language "${language}" not in keep list - marked for removal`);
@@ -1510,7 +1514,7 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
         }
 
         // Check for duplicate removal
-        if (InputValidator.parseBool(args.inputs.remove_lower_quality_duplicates, true)) {
+        if (InputValidator.parseBool(args.inputs.remove_lower_quality_duplicates, false)) {
             logger.extended('Analyzing for duplicate audio tracks...');
 
             const duplicatesToRemove = findDuplicateAudioTracks(args.inputFileObj.ffProbeData.streams, audioStreamsToRemove);
@@ -1539,20 +1543,17 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
             logger.success('No lower channel duplicates found');
         }
 
-        // ============================================================
-        // CRITICAL SAFETY CHECK: Prevent files from ending up with no audio
-        // ============================================================
-        const remainingAudioStreams = args.inputFileObj.ffProbeData.streams.filter((stream, index) => 
+        // ── SINGLE AUDIO SAFETY GUARD ──────────────────────────────────────────
+        const remainingAudioStreams = args.inputFileObj.ffProbeData.streams.filter((stream, index) =>
             stream.codec_type === 'audio' && !audioStreamsToRemove.includes(index)
         );
 
         if (remainingAudioStreams.length === 0) {
             logger.warn(`⚠️ CRITICAL: All audio tracks would be removed! This would result in a silent file.`);
-            
-            // Find the best audio track to keep (highest channels + quality)
+
             let bestAudioIndex = -1;
             let bestScore = -1;
-            
+
             for (let i = 0; i < args.inputFileObj.ffProbeData.streams.length; i++) {
                 const stream = args.inputFileObj.ffProbeData.streams[i];
                 if (stream.codec_type === 'audio') {
@@ -1565,9 +1566,8 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                     }
                 }
             }
-            
+
             if (bestAudioIndex !== -1) {
-                // Remove this track from the removal list
                 const removeIndex = audioStreamsToRemove.indexOf(bestAudioIndex);
                 if (removeIndex !== -1) {
                     audioStreamsToRemove.splice(removeIndex, 1);
@@ -1585,13 +1585,11 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                 const isCommentary = isCommentaryTrack(stream);
                 const isAtmos = isAtmosTrack(stream);
 
-                // Skip commentary analysis if configured
                 if (InputValidator.parseBool(args.inputs.ignore_commentary, false) && isCommentary) {
                     logger.info(`Audio ${i}: Commentary track - will keep as-is`);
                     continue;
                 }
 
-                // Skip Atmos tracks if keep_atmos is enabled
                 if (keepAtmos && isAtmos) {
                     logger.success(`Audio ${i}: Atmos track detected — keeping as-is (${stream.codec_name})`);
                     continue;
@@ -1651,7 +1649,6 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
         // Build language-based track plan
         const languageTrackPlan = new Map();
 
-        // First, analyze what tracks exist per language
         for (let i = 0; i < args.inputFileObj.ffProbeData.streams.length; i++) {
             const stream = args.inputFileObj.ffProbeData.streams[i];
 
@@ -1683,7 +1680,7 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                 channels: channels,
                 codec: codec,
                 isCommentary: isCommentary,
-                isAtmos: isAtmos
+                isAtmos: isAtmos,
             });
 
             if (channels <= 2) {
@@ -1702,7 +1699,7 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                     channels: channels,
                     codec: codec,
                     isCommentary: isCommentary,
-                    isAtmos: isAtmos
+                    isAtmos: isAtmos,
                 };
             }
         }
@@ -1711,137 +1708,329 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
 
         let audioOutputIndex = 0;
 
-        // Process each language group
         for (const [language, langData] of languageTrackPlan) {
             logger.extended(`Processing language: ${language}`);
 
-            const keep71As71 = InputValidator.parseBool(args.inputs.keep_71_as_71, false);
+            const keep71As71    = InputValidator.parseBool(args.inputs.keep_71_as_71, false);
             const create51From71 = InputValidator.parseBool(args.inputs.create_51_from_71, false);
             const create20IfMissing = InputValidator.parseBool(args.inputs.create_20_if_missing, false);
 
-            // For each language, we'll process the highest quality track first
-            const sortedStreams = [...langData.streams].sort((a, b) => {
-                if (b.channels !== a.channels) return b.channels - a.channels;
-                const qualityA = getCodecQuality(a.codec, a.stream.tags?.title || '');
-                const qualityB = getCodecQuality(b.codec, b.stream.tags?.title || '');
-                return qualityB - qualityA;
-            });
+            const tracksToCreate = [];
 
-            for (const streamInfo of sortedStreams) {
-                const stream = streamInfo.stream;
-                const streamIndex = streamInfo.streamIndex;
-                const channels = streamInfo.channels;
-                const isAtmos = streamInfo.isAtmos;
-                const isCommentary = streamInfo.isCommentary;
+            for (const streamData of langData.streams) {
+                const stream = streamData.stream;
+                const channels = streamData.channels;
+                const codec = streamData.codec;
+                const streamIndex = streamData.streamIndex;
+                const isCommentary = streamData.isCommentary;
+                const isAtmos = streamData.isAtmos;
 
-                // Skip Atmos if configured to keep them as-is (they're already handled above)
                 if (keepAtmos && isAtmos) {
-                    // Just copy the stream as-is
-                    ffmpegArgs.push('-map', `0:${streamIndex}`);
-                    ffmpegArgs.push('-c:a:${audioOutputIndex}', 'copy');
-                    ffmpegArgs.push('-metadata:s:a:${audioOutputIndex}', `language=${language}`);
-                    if (stream.tags?.title) {
-                        ffmpegArgs.push('-metadata:s:a:${audioOutputIndex}', `title=${stream.tags.title}`);
-                    }
-                    audioOutputIndex++;
+                    tracksToCreate.push({
+                        streamIndex: streamIndex,
+                        action: 'copy',
+                        channels: channels,
+                        language: language,
+                        title: stream.tags?.title || '',
+                        description: `Keep Atmos track as-is (${codec} ${channels}ch)`
+                    });
                     continue;
                 }
 
-                // Determine if we need to convert this track
-                const needsConversion = codecsToConvert.includes(stream.codec_name) && stream.codec_name !== 'opus';
-                
-                if (!needsConversion && stream.codec_name === 'opus') {
-                    // Copy Opus track as-is
-                    ffmpegArgs.push('-map', `0:${streamIndex}`);
-                    ffmpegArgs.push('-c:a:${audioOutputIndex}', 'copy');
-                    ffmpegArgs.push('-metadata:s:a:${audioOutputIndex}', `language=${language}`);
-                    if (stream.tags?.title) {
-                        ffmpegArgs.push('-metadata:s:a:${audioOutputIndex}', `title=${stream.tags.title}`);
-                    }
-                    audioOutputIndex++;
-                } else if (needsConversion) {
-                    // Convert to Opus
-                    const sourceBitrate = stream.bit_rate ? parseInt(stream.bit_rate) / 1000 : 0;
-                    const targetBitrate = calculateTargetBitrate(channels, sourceBitrate, args.inputs);
-                    const targetChannels = calculateTargetChannels(channels, args.inputs);
-                    
-                    let audioFilter = '';
-                    if (targetChannels === 2 && channels > 2) {
-                        audioFilter = createStereoDownmixFilter(channels);
-                    } else if (targetChannels !== channels) {
-                        audioFilter = `aformat=channel_layouts=${targetChannels}.1`;
-                    }
-                    
-                    ffmpegArgs.push('-map', `0:${streamIndex}`);
-                    ffmpegArgs.push('-c:a:${audioOutputIndex}', 'libopus');
-                    ffmpegArgs.push('-b:a:${audioOutputIndex}', targetBitrate);
-                    if (audioFilter) {
-                        ffmpegArgs.push('-af:a:${audioOutputIndex}', audioFilter);
-                    }
-                    ffmpegArgs.push('-metadata:s:a:${audioOutputIndex}', `language=${language}`);
-                    if (stream.tags?.title) {
-                        ffmpegArgs.push('-metadata:s:a:${audioOutputIndex}', `title=${stream.tags.title} (Converted to Opus)`);
+                let sourceBitrate = 0;
+                if (stream.bit_rate) {
+                    sourceBitrate = parseInt(stream.bit_rate, 10);
+                } else if (stream.tags?.BPS) {
+                    sourceBitrate = parseInt(stream.tags.BPS, 10);
+                }
+                const sourceBitrateKbps = sourceBitrate > 0 ? Math.round(sourceBitrate / 1000) : 0;
+
+                const needsConversion = codecsToConvert.includes(codec) && 
+                                       codec !== 'opus' &&
+                                       (!isCommentary || !InputValidator.parseBool(args.inputs.ignore_commentary, false));
+
+                if (!needsConversion) {
+                    tracksToCreate.push({
+                        streamIndex: streamIndex,
+                        action: 'copy',
+                        channels: channels,
+                        language: language,
+                        title: stream.tags?.title || '',
+                        description: `Copy ${codec} ${channels}ch`
+                    });
+                    continue;
+                }
+
+                if (channels >= 8) {
+                    if (keep71As71) {
+                        const bitrate71 = calculateTargetBitrate(8, sourceBitrateKbps, args.inputs);
+                        tracksToCreate.push({
+                            streamIndex: streamIndex,
+                            action: 'convert',
+                            sourceChannels: channels,
+                            targetChannels: 8,
+                            bitrate: bitrate71,
+                            language: language,
+                            title: stream.tags?.title || '',
+                            description: `Convert to 7.1 Opus @ ${bitrate71}`,
+                            useDownmixFilter: false
+                        });
+
+                        if (create51From71) {
+                            const bitrate51 = calculateTargetBitrate(6, sourceBitrateKbps, args.inputs);
+                            tracksToCreate.push({
+                                streamIndex: streamIndex,
+                                action: 'convert',
+                                sourceChannels: channels,
+                                targetChannels: 6,
+                                bitrate: bitrate51,
+                                language: language,
+                                title: stream.tags?.title ? `${stream.tags.title} (5.1)` : '5.1',
+                                description: `Create 5.1 Opus from 7.1+ @ ${bitrate51}`,
+                                useDownmixFilter: true,
+                                downmixType: '5.1'
+                            });
+                        }
                     } else {
-                        ffmpegArgs.push('-metadata:s:a:${audioOutputIndex}', `title=Opus ${targetChannels}.0ch`);
+                        const bitrate51 = calculateTargetBitrate(6, sourceBitrateKbps, args.inputs);
+                        tracksToCreate.push({
+                            streamIndex: streamIndex,
+                            action: 'convert',
+                            sourceChannels: channels,
+                            targetChannels: 6,
+                            bitrate: bitrate51,
+                            language: language,
+                            title: stream.tags?.title || '',
+                            description: `Downmix to 5.1 Opus @ ${bitrate51}`,
+                            useDownmixFilter: true,
+                            downmixType: '5.1'
+                        });
                     }
-                    audioOutputIndex++;
+                } else if (channels === 6) {
+                    const bitrate51 = calculateTargetBitrate(6, sourceBitrateKbps, args.inputs);
+                    tracksToCreate.push({
+                        streamIndex: streamIndex,
+                        action: 'convert',
+                        sourceChannels: channels,
+                        targetChannels: 6,
+                        bitrate: bitrate51,
+                        language: language,
+                        title: stream.tags?.title || '',
+                        description: `Convert to 5.1 Opus @ ${bitrate51}`,
+                        useDownmixFilter: false
+                    });
+                } else if (channels <= 2) {
+                    const targetChannels = Math.min(channels, 2);
+                    const bitrate = calculateTargetBitrate(targetChannels, sourceBitrateKbps, args.inputs);
+                    tracksToCreate.push({
+                        streamIndex: streamIndex,
+                        action: 'convert',
+                        sourceChannels: channels,
+                        targetChannels: targetChannels,
+                        bitrate: bitrate,
+                        language: language,
+                        title: stream.tags?.title || '',
+                        description: `Convert to ${targetChannels}ch Opus @ ${bitrate}`,
+                        useDownmixFilter: false
+                    });
+                } else {
+                    const bitrate = calculateTargetBitrate(2, sourceBitrateKbps, args.inputs);
+                    tracksToCreate.push({
+                        streamIndex: streamIndex,
+                        action: 'convert',
+                        sourceChannels: channels,
+                        targetChannels: 2,
+                        bitrate: bitrate,
+                        language: language,
+                        title: stream.tags?.title || '',
+                        description: `Downmix to stereo Opus @ ${bitrate}`,
+                        useDownmixFilter: true,
+                        downmixType: 'stereo'
+                    });
                 }
             }
 
-            // Create additional tracks if configured
-            if (create51From71 && langData.has71Plus && !langData.has51) {
-                logger.extended(`Creating 5.1 downmix from 7.1+ for language: ${language}`);
-                const sourceStream = langData.highestChannelStream;
-                if (sourceStream) {
-                    ffmpegArgs.push('-map', `0:${sourceStream.streamIndex}`);
-                    ffmpegArgs.push('-c:a:${audioOutputIndex}', 'libopus');
-                    const sourceBitrate = sourceStream.stream.bit_rate ? parseInt(sourceStream.stream.bit_rate) / 1000 : 0;
-                    const targetBitrate = calculateTargetBitrate(6, sourceBitrate, args.inputs);
-                    ffmpegArgs.push('-b:a:${audioOutputIndex}', targetBitrate);
-                    ffmpegArgs.push('-af:a:${audioOutputIndex}', 'aformat=channel_layouts=5.1');
-                    ffmpegArgs.push('-metadata:s:a:${audioOutputIndex}', `language=${language}`);
-                    ffmpegArgs.push('-metadata:s:a:${audioOutputIndex}', 'title=Opus 5.1 Downmix');
-                    audioOutputIndex++;
-                }
-            }
-
+            // After processing existing streams, check if we need to create stereo
             if (create20IfMissing && !langData.hasStereo && langData.highestChannelStream) {
-                logger.extended(`Creating 2.0 stereo downmix for language: ${language}`);
-                const sourceStream = langData.highestChannelStream;
-                if (sourceStream) {
-                    ffmpegArgs.push('-map', `0:${sourceStream.streamIndex}`);
-                    ffmpegArgs.push('-c:a:${audioOutputIndex}', 'libopus');
-                    const sourceBitrate = sourceStream.stream.bit_rate ? parseInt(sourceStream.stream.bit_rate) / 1000 : 0;
-                    const targetBitrate = calculateTargetBitrate(2, sourceBitrate, args.inputs);
-                    ffmpegArgs.push('-b:a:${audioOutputIndex}', targetBitrate);
-                    const downmixFilter = createStereoDownmixFilter(sourceStream.channels);
-                    ffmpegArgs.push('-af:a:${audioOutputIndex}', downmixFilter);
-                    ffmpegArgs.push('-metadata:s:a:${audioOutputIndex}', `language=${language}`);
-                    ffmpegArgs.push('-metadata:s:a:${audioOutputIndex}', 'title=Opus 2.0 Stereo Downmix');
-                    audioOutputIndex++;
+                const highestStream = langData.highestChannelStream;
+                const skipDueToAtmos = keepAtmos && highestStream.isAtmos;
+
+                if (highestStream.channels > 2 && highestStream.codec !== 'opus' && !skipDueToAtmos) {
+                    let sourceBitrate = 0;
+                    if (highestStream.stream.bit_rate) {
+                        sourceBitrate = parseInt(highestStream.stream.bit_rate, 10);
+                    } else if (highestStream.stream.tags?.BPS) {
+                        sourceBitrate = parseInt(highestStream.stream.tags.BPS, 10);
+                    }
+                    const sourceBitrateKbps = sourceBitrate > 0 ? Math.round(sourceBitrate / 1000) : 0;
+
+                    const bitrateStereo = calculateTargetBitrate(2, sourceBitrateKbps, args.inputs);
+
+                    tracksToCreate.push({
+                        streamIndex: highestStream.streamIndex,
+                        action: 'convert',
+                        sourceChannels: highestStream.channels,
+                        targetChannels: 2,
+                        bitrate: bitrateStereo,
+                        language: language,
+                        title: highestStream.stream.tags?.title ? `${highestStream.stream.tags.title} (Stereo)` : 'Stereo',
+                        description: `Create stereo Opus from ${highestStream.channels}ch @ ${bitrateStereo}`,
+                        useDownmixFilter: true,
+                        downmixType: 'stereo'
+                    });
+
+                    logger.extended(`Creating stereo track for ${language} from ${highestStream.channels}ch source`);
+                } else if (skipDueToAtmos) {
+                    logger.extended(`Skipping stereo creation for ${language} — highest channel source is an Atmos track being kept as-is`);
                 }
             }
-        }
 
-        // Map subtitle streams (copy all subtitles)
-        for (let i = 0; i < args.inputFileObj.ffProbeData.streams.length; i++) {
-            const stream = args.inputFileObj.ffProbeData.streams[i];
-            if (stream.codec_type === 'subtitle') {
-                ffmpegArgs.push('-map', `0:${i}`);
-                ffmpegArgs.push('-c:s:${i}', 'copy');
+            // Now build FFmpeg arguments for all tracks to create
+            for (const track of tracksToCreate) {
+                ffmpegArgs.push('-map', `0:${track.streamIndex}`);
+
+                if (track.action === 'copy') {
+                    ffmpegArgs.push(`-c:a:${audioOutputIndex}`, 'copy');
+                    logger.extended(`Track ${audioOutputIndex}: ${track.description}`);
+                } else {
+                    ffmpegArgs.push(`-c:a:${audioOutputIndex}`, 'libopus');
+                    ffmpegArgs.push(`-b:a:${audioOutputIndex}`, track.bitrate);
+
+                    if (track.targetChannels === 6) {
+                        ffmpegArgs.push(`-ac:a:${audioOutputIndex}`, '6');
+                        ffmpegArgs.push(`-mapping_family:a:${audioOutputIndex}`, '1');
+
+                        if (track.useDownmixFilter && track.downmixType === '5.1') {
+                            ffmpegArgs.push(`-filter:a:${audioOutputIndex}`, 'pan=5.1|FL=FL|FR=FR|FC=FC|LFE=LFE|BL=BL|BR=BR');
+                        }
+                    } else if (track.targetChannels === 8) {
+                        ffmpegArgs.push(`-ac:a:${audioOutputIndex}`, '8');
+                        ffmpegArgs.push(`-mapping_family:a:${audioOutputIndex}`, '1');
+                    } else if (track.targetChannels === 2) {
+                        ffmpegArgs.push(`-ac:a:${audioOutputIndex}`, '2');
+                        ffmpegArgs.push(`-mapping_family:a:${audioOutputIndex}`, '0');
+
+                        if (track.useDownmixFilter && track.downmixType === 'stereo') {
+                            const stereoFilter = createStereoDownmixFilter(track.sourceChannels);
+                            ffmpegArgs.push(`-filter:a:${audioOutputIndex}`, stereoFilter);
+                        }
+                    } else if (track.targetChannels === 1) {
+                        ffmpegArgs.push(`-ac:a:${audioOutputIndex}`, '1');
+                        ffmpegArgs.push(`-mapping_family:a:${audioOutputIndex}`, '0');
+                    } else {
+                        ffmpegArgs.push(`-ac:a:${audioOutputIndex}`, track.targetChannels.toString());
+                        ffmpegArgs.push(`-mapping_family:a:${audioOutputIndex}`, track.targetChannels > 2 ? '1' : '0');
+                    }
+
+                    logger.extended(`Track ${audioOutputIndex}: ${track.description}`);
+                }
+
+                if (track.language && track.language !== 'none') {
+                    ffmpegArgs.push(`-metadata:s:a:${audioOutputIndex}`, `language=${track.language}`);
+                }
+                if (track.title) {
+                    ffmpegArgs.push(`-metadata:s:a:${audioOutputIndex}`, `title=${track.title}`);
+                }
+
+                audioOutputIndex++;
             }
         }
 
-        ffmpegArgs.push('-max_muxing_queue_size', '1024');
+        // Map subtitles, data, and attachments
+        ffmpegArgs.push('-map', '0:s?');
+        ffmpegArgs.push('-c:s', 'copy');
+        ffmpegArgs.push('-map', '0:d?');
+        ffmpegArgs.push('-map', '0:t?');
+
+        ffmpegArgs.push('-max_muxing_queue_size', '9999');
         ffmpegArgs.push('-y', outputFilePath);
 
-        logger.info(`FFmpeg command: ${ffmpegPath} ${ffmpegArgs.join(' ')}`);
+        logger.success('FFmpeg command built successfully with multi-track support');
+        logger.extended(`Output path: ${outputFilePath}`);
+        logger.extended(`Total audio tracks in output: ${audioOutputIndex}`);
+        logger.extended(`Audio streams removed: ${audioStreamsToRemove.length}`);
 
-        // Execute FFmpeg
-        const ffmpegResult = yield (0, cliUtils_1.ffmpeg)(ffmpegPath, ffmpegArgs, logger);
-        
-        if (ffmpegResult.error) {
-            logger.error(`FFmpeg processing failed: ${ffmpegResult.error}`);
+        if (args.inputs.logging_level === 'debug') {
+            logger.debug(`Full FFmpeg command: ${ffmpegPath} ${ffmpegArgs.join(' ')}`);
+        }
+
+        logger.success('Executing FFmpeg processing...');
+
+        try {
+            const cli = new cliUtils_1.CLI({
+                cli: ffmpegPath,
+                spawnArgs: ffmpegArgs,
+                spawnOpts: {},
+                jobLog: args.jobLog,
+                outputFilePath: outputFilePath,
+                inputFileObj: args.inputFileObj,
+                logFullCliOutput: args.logFullCliOutput,
+                updateWorker: args.updateWorker,
+                args,
+            });
+
+            const res = yield cli.runCli();
+
+            if (res.cliExitCode !== 0) {
+                logger.error(`FFmpeg failed with exit code: ${res.cliExitCode}`);
+                args.jobLog(logger.getOutput());
+                return {
+                    outputFileObj: args.inputFileObj,
+                    outputNumber: 3,
+                    variables: args.variables,
+                };
+            }
+
+            processingMetrics.audioProcessingTime = Date.now() - audioStartTime;
+            processingMetrics.totalTime = performanceTimer.getTotalTime();
+
+            logger.success('FFmpeg processing completed successfully');
+            logger.success('Audio processing complete!');
+            logger.info('Ready for Stream Ordering plugin');
+            logger.info('=== End of Audio Processing ===');
+
+            if (args.inputs.logging_level === 'extended' || args.inputs.logging_level === 'debug') {
+                logger.subsection('Performance Metrics');
+                logger.extended(`⏱️ Language detection: ${processingMetrics.languageDetectionTime}ms`);
+                logger.extended(`⏱️ Stream analysis: ${processingMetrics.streamAnalysisTime}ms`);
+                logger.extended(`⏱️ Audio processing: ${processingMetrics.audioProcessingTime}ms`);
+                logger.extended(`⏱️ Total processing: ${processingMetrics.totalTime}ms`);
+            }
+
+            args.jobLog(logger.getOutput());
+
+            const enhancedVariables = Object.assign(Object.assign({}, args.variables), {
+                denix_audio_completed: true,
+                denix_audio_processing_time: processingMetrics.totalTime,
+                denix_audio_languages_detected: detectedLanguages.join(','),
+                denix_audio_streams_removed: audioStreamsToRemove.length,
+                denix_audio_conversion_performed: audioConversionNeeded,
+                denix_audio_tracks_created: audioOutputIndex,
+                denix_audio_ffmpeg_path: ffmpegPath,
+                denix_audio_os_detected: detectOperatingSystem(),
+                denix_audio_timestamp: new Date().toISOString(),
+                denix_audio_plugin_version: '3.1.0',
+                denix_audio_language_detection_time: processingMetrics.languageDetectionTime,
+                denix_audio_stream_analysis_time: processingMetrics.streamAnalysisTime,
+                denix_audio_audio_processing_time: processingMetrics.audioProcessingTime,
+                denix_audio_duplicate_tracks_removed: InputValidator.parseBool(args.inputs.remove_lower_quality_duplicates, false) ? findDuplicateAudioTracks(args.inputFileObj.ffProbeData.streams, audioStreamsToRemove).length : 0,
+                denix_audio_streams_processed: args.inputFileObj.ffProbeData.streams.length,
+                denix_audio_output_streams: audioOutputIndex,
+                denix_audio_atmos_kept: keepAtmos,
+            });
+
+            return {
+                outputFileObj: {
+                    _id: outputFilePath,
+                },
+                outputNumber: 1,
+                variables: enhancedVariables,
+            };
+
+        } catch (ffmpegError) {
+            logger.error(`FFmpeg execution failed: ${ffmpegError.message}`);
+            logger.error('Audio processing failed - routing to error output');
+
             args.jobLog(logger.getOutput());
             return {
                 outputFileObj: args.inputFileObj,
@@ -1850,38 +2039,16 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
             };
         }
 
-        processingMetrics.audioProcessingTime = Date.now() - audioStartTime;
-        performanceTimer.mark('audioProcessing');
-        processingMetrics.totalTime = performanceTimer.getTotalTime();
-
-        logger.success('FFmpeg processing completed successfully');
-        
-        const stats = fs.statSync(outputFilePath);
-        const outputFileObj = Object.assign({}, args.inputFileObj);
-        outputFileObj._id = outputFilePath;
-        outputFileObj.fileSize = stats.size;
-
-        processingMetrics.totalTime = performanceTimer.getTotalTime();
-        
-        logger.success(`Audio processing complete! Total time: ${processingMetrics.totalTime}ms`);
-        logger.info('Ready for Stream Ordering plugin');
-        
-        args.jobLog(logger.getOutput());
-        
-        return {
-            outputFileObj: outputFileObj,
-            outputNumber: 1,
-            variables: args.variables,
-        };
-        
     } catch (error) {
-        if (logger) {
-            logger.error(`Plugin error: ${error.message}`);
-            logger.error(error.stack);
-            args.jobLog(logger.getOutput());
-        } else {
-            args.jobLog(`Plugin error: ${error.message}`);
+        if (!logger) {
+            logger = new Logger('info');
         }
+        logger.error(`Plugin execution failed: ${error.message}`);
+        if (error.stack) {
+            logger.debug(`Stack trace: ${error.stack}`);
+        }
+        logger.error('Critical error occurred - plugin execution failed');
+        args.jobLog(logger.getOutput());
         return {
             outputFileObj: args.inputFileObj,
             outputNumber: 3,
@@ -1889,4 +2056,5 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
         };
     }
 });
+
 exports.plugin = plugin;
