@@ -15,7 +15,6 @@ const cliUtils_1 = require("../../../../FlowHelpers/1.0.0/cliUtils");
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
-const axios = require('axios');
 
 /* eslint no-plusplus: ["error", { "allowForLoopAfterthoughts": true }] */
 
@@ -999,6 +998,7 @@ const findLowerChannelDuplicates = (streams, audioStreamsToRemove = []) => {
 // IMPROVED: Enhanced IMDB redirect detection with proper error handling
 const checkImdbRedirect = (imdbId, args, logger) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        const axios = require('axios');
         const imdbUrl = `https://www.imdb.com/title/${imdbId}/`;
 
         logger.debug(`Checking for IMDB redirects: ${imdbUrl}`);
@@ -1049,6 +1049,7 @@ const checkImdbRedirect = (imdbId, args, logger) => __awaiter(void 0, void 0, vo
 // IMPROVED: Enhanced TMDB API lookup with timeout and retry
 const tryTmdbLookup = (id, args, logger, searchType = 'imdb_id') => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        const axios = require('axios');
         logger.debug(`TMDB API lookup: ${searchType} = ${id}`);
 
         const apiKey = args.inputs.tmdb_api_key;
@@ -1173,6 +1174,7 @@ const lookupInArrInstance = (service, instance, fileName, args, logger) => __awa
     }
 
     try {
+        const axios = require('axios');
         logger.api(`Querying ${service.charAt(0).toUpperCase() + service.slice(1)} ${instance}: ${url}`);
 
         let cleanUrl = url.trim().replace(/\/$/, '');
