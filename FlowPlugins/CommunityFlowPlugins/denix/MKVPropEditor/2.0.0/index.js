@@ -23,6 +23,7 @@ const details = () => ({
         backgroundColor: 'rgba(156, 39, 176, 0.1)',
         borderWidth: '2px',
         borderStyle: 'solid',
+        // Enhanced bright purple glow with 10 layers - expanded reach with graduated opacity
         boxShadow: `
             0 0 10px rgba(156, 39, 176, 0.5),
             0 0 25px rgba(156, 39, 176, 0.46),
@@ -55,6 +56,16 @@ const details = () => ({
                 type: 'text',
             },
             tooltip: 'Arguments to pass to mkvpropedit (without filename). Common: --add-track-statistics-tags, --parse-mode full, --edit info --set title="New Title"',
+        },
+        {
+            label: '⚠️ Continue with Defaults on Variable Error',
+            name: 'continueWithDefaultOnError',
+            type: 'boolean',
+            defaultValue: false,
+            inputUI: {
+                type: 'switch',
+            },
+            tooltip: 'If a flow variable fails to resolve and arguments are empty, the plugin will abort by default to prevent silently modifying files. Enable this to allow the plugin to continue using the default arguments instead.',
         },
         {
             label: '🛠️ MKVPropEdit Path (Windows)',
@@ -178,7 +189,7 @@ const createTimer = () => {
     return {
         stop: () => {
             const endTime = process.hrtime.bigint();
-            return Number(endTime - startTime) / 1000000;
+            return Number(endTime - startTime) / 1000000; // Convert to milliseconds
         }
     };
 };
@@ -202,8 +213,10 @@ const parseAndValidateArgs = (argsString) => {
     };
 
     try {
+        // Split arguments respecting quoted strings
         const args = argsString.trim().split(/\s+(?=(?:[^"]*"[^"]*")*[^"]*$)/);
-
+        
+        // Common argument patterns and validation
         const validPatterns = [
             /^--add-track-statistics-tags$/,
             /^--parse-mode$/,
@@ -235,6 +248,7 @@ const parseAndValidateArgs = (argsString) => {
             if (arg.trim()) {
                 let cleanedArg = arg.trim();
 
+                // Strip ONLY wrapping quotes (preserve inner content)
                 if (
                     (cleanedArg.startsWith('"') && cleanedArg.endsWith('"')) ||
                     (cleanedArg.startsWith("'") && cleanedArg.endsWith("'"))
@@ -243,8 +257,10 @@ const parseAndValidateArgs = (argsString) => {
                 }
 
                 result.args.push(cleanedArg);
-
+                
+                // Basic validation
                 if (arg.startsWith('--')) {
+                    // Check for potentially dangerous operations
                     if (arg.includes('--delete') && !arg.includes('--delete-track-statistics-tags')) {
                         result.warnings.push(`Potentially destructive operation: ${arg}`);
                     }
@@ -252,6 +268,7 @@ const parseAndValidateArgs = (argsString) => {
             }
         }
 
+        // Check for common mistakes
         if (result.args.includes('--edit') && !result.args.some(arg => arg.includes('info') || arg.includes('track:'))) {
             result.warnings.push('--edit specified without target (info/track)');
         }
@@ -282,7 +299,7 @@ const analyzeMKVFile = (inputFileObj) => {
     try {
         if (inputFileObj.ffProbeData?.streams) {
             analysis.trackCount = inputFileObj.ffProbeData.streams.length;
-
+            
             inputFileObj.ffProbeData.streams.forEach(stream => {
                 switch (stream.codec_type) {
                     case 'video':
@@ -338,17 +355,17 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const lib = require('../../../../../methods/lib')();
         const path = require('path');
-
+        
         // Load default values
         args.inputs = lib.loadDefaultValues(args.inputs, details);
-
+        
         // Initialize logger
         const logger = new Logger(args.inputs.logging_level);
-
+        
         // Performance tracking
         const startTime = Date.now();
         let performanceTimer = null;
-
+        
         if (args.inputs.showPerformanceMetrics) {
             performanceTimer = createTimer();
         }
@@ -360,7 +377,7 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
         // ===============================================
         // STEP 1: OS DETECTION AND PATH SELECTION
         // ===============================================
-
+        
         logger.subsection('Step 1: OS detection and binary path selection');
 
         const detectedOS = detectOS();
@@ -381,11 +398,12 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
         // ===============================================
         // STEP 2: FILE ANALYSIS
         // ===============================================
-
+        
         logger.subsection('Step 2: File analysis');
 
+        // Analyze MKV file
         const fileAnalysis = analyzeMKVFile(args.inputFileObj);
-
+        
         if (['extended', 'debug'].includes(args.inputs.logging_level)) {
             logger.extended(`Track count: ${fileAnalysis.trackCount}`);
             logger.extended(`Video tracks: ${fileAnalysis.hasVideoTracks ? 'Yes' : 'No'}`);
@@ -398,7 +416,7 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
         // ===============================================
         // STEP 3: ARGUMENT PARSING AND VALIDATION
         // ===============================================
-
+        
         logger.subsection('Step 3: Argument parsing and validation');
 
         // Check the raw input value before any fallback
@@ -407,9 +425,22 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
 
         if (!rawArgsInput) {
             logger.warn('⚠️ MKVPropEdit arguments input is EMPTY or UNDEFINED!');
-            logger.warn('This usually means a flow variable reference (e.g. {{{args.variables.user.PropEditArg}}}) did not resolve.');
-            logger.warn(`Falling back to default arguments: ${defaultArgs}`);
-            logger.warn('Check your setFlowVariable plugin — make sure "variable" is the KEY name and "value" is the actual command string.');
+            logger.warn('This usually means a flow variable reference (e.g. {{{args.variables.user.PropEditArg}}}) failed to resolve.');
+            
+            if (!args.inputs.continueWithDefaultOnError) {
+                // DEFAULT BEHAVIOR: Fail safely to prevent unintended file modifications
+                logger.error('🛑 "Continue with Defaults on Variable Error" is DISABLED. Aborting to prevent unintended file modifications.');
+                logger.error('💡 Fix: Check your setFlowVariable plugin (ensure key/value are not swapped) or wire the library variable directly.');
+                args.jobLog(logger.getOutput());
+                return {
+                    outputFileObj: args.inputFileObj,
+                    outputNumber: 2,
+                    variables: args.variables,
+                };
+            } else {
+                // OPT-IN BEHAVIOR: User explicitly allowed falling back to defaults
+                logger.warn(`"Continue with Defaults on Variable Error" is ENABLED. Falling back to default arguments: ${defaultArgs}`);
+            }
         } else {
             logger.debug(`🔍 Raw arguments input: "${rawArgsInput}"`);
         }
@@ -418,7 +449,7 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
         logger.debug(`🔍 Final arguments to parse: ${userArgs}`);
 
         const argValidation = parseAndValidateArgs(userArgs);
-
+        
         if (!argValidation.isValid) {
             logger.error('Invalid MKVPropEdit arguments provided');
             argValidation.errors.forEach(error => logger.error(error));
@@ -440,7 +471,7 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
         // ===============================================
         // STEP 4: MKVPROPEDIT EXECUTION
         // ===============================================
-
+        
         logger.subsection('Step 4: Executing MKVPropEdit');
 
         // Build complete command arguments
@@ -467,12 +498,13 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
         // ===============================================
         // STEP 5: RESULT ANALYSIS AND REPORTING
         // ===============================================
-
+        
         logger.subsection('Step 5: Result analysis and reporting');
 
         let outputNumber = 1;
         const exitCode = res.cliExitCode;
 
+        // Analyze exit codes
         if (exitCode === 0) {
             logger.success('MKVPropEdit completed successfully');
             logger.info('All metadata operations completed without errors');
@@ -493,7 +525,7 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
             const executionTime = performanceTimer.stop();
             logger.extended(`⏱️ MKVPropEdit execution time: ${executionTime.toFixed(2)}ms`);
             logger.extended(`⏱️ Total processing time: ${totalTime}ms`);
-
+            
             const efficiency = totalTime > 0 ? Math.round((fileAnalysis.fileSize / totalTime) / 1024) : 0;
             if (efficiency > 0) {
                 logger.extended(`📈 Processing efficiency: ${efficiency} KB/ms`);
@@ -507,13 +539,13 @@ const plugin = (args) => __awaiter(void 0, void 0, void 0, function* () {
                 { name: 'OS Detection', enabled: true, value: detectedOS },
                 { name: 'Performance metrics', enabled: args.inputs.showPerformanceMetrics }
             ];
-
+            
             features.forEach(feature => {
                 const status = feature.enabled ? '✅' : '❌';
                 const value = feature.value ? ` (${feature.value})` : '';
                 logger.debug(`${status} ${feature.name}: ${feature.enabled ? 'Enabled' : 'Disabled'}${value}`);
             });
-
+            
             logger.debug(`🔧 Arguments processed: ${argValidation.args.length}`);
             logger.debug(`🎬 File tracks: ${fileAnalysis.trackCount}`);
             logger.debug(`⚙️ Exit code: ${exitCode}`);
